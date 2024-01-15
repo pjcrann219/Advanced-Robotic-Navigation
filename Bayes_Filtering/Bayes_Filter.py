@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-import time
+
 
 def p_measure(z, x):
     """Looks up measurement probability.
@@ -131,28 +131,36 @@ def Bayes(u, z, bel = [0.5, 0.5], debug = False, plot = False):
 
     return bels
 
-## Question 1 - action = do nothing, measurement = door open
-u =  np.zeros([50,1]) # define actions 
-z = np.ones([50,1]) # define measurements
-bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
-print('Q1) The robot will be 99.99% certain that the door is open after iteration ' + str(np.argmax(bels[:,1] > 0.9999)))
+def main():
+    """
+    Main code block that runs Bayes() function for all use cases
+    """
+    ## Question 1 - action = do nothing, measurement = door open
+    u =  np.zeros([50,1]) # define actions 
+    z = np.ones([50,1]) # define measurements
+    bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
+    print('Q1) The robot will be 99.99% certain that the door is open after iteration ' + str(np.argmax(bels[:,1] > 0.9999)))
 
-## Question 2 - action = do nothing, measurement = door closed
-u =  np.ones([50,1]) # define actions
-z = np.ones([50,1]) # define measurements
-bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
-print('Q2) The robot will be 99.99% certain that the door is open after iteration ' + str(np.argmax(bels[:,1] > 0.9999)))
+    ## Question 2 - action = do nothing, measurement = door closed
+    u =  np.ones([50,1]) # define actions
+    z = np.ones([50,1]) # define measurements
+    bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
+    print('Q2) The robot will be 99.99% certain that the door is open after iteration ' + str(np.argmax(bels[:,1] > 0.9999)))
 
-## Question 3 - action = push, measurement = door closed
-u =  np.ones([50,1]) # define actions
-z = np.zeros([50,1]) # define measurements
-bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
+    ## Question 3 - action = push, measurement = door closed
+    u =  np.ones([50,1]) # define actions
+    z = np.zeros([50,1]) # define measurements
+    bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
 
-if bels[-1,1] > 0.5:
-    ssbelief = 'Open'
-    certainty = 100 * bels[-1,1]
-else:
-    ssbelief = 'Closed'
-    certainty = 100 * bels[-1,0]
+    # Current estimate is highest prop belief
+    if bels[-1,1] > 0.5:
+        ssbelief = 'Open'
+        certainty = 100 * bels[-1,1]
+    else:
+        ssbelief = 'Closed'
+        certainty = 100 * bels[-1,0]
 
-print('Q3) The steady state belief is ' + ssbelief + ' with a certainty of ' + str(round(certainty, 5)) + '%')
+    print('Q3) The steady state belief is ' + ssbelief + ' with a certainty of ' + str(round(certainty, 5)) + '%')
+
+if __name__ == '__main__':
+    main()
