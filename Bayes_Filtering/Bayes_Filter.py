@@ -111,7 +111,7 @@ def Bayes(u, z, bel = [0.5, 0.5], debug = False, plot = False):
     if len(u) != len(z):
         raise Exception("u and z must be same length")
 
-    # initiate bels
+    # init bels
     bels = np.zeros([len(u)+1, 2])
     bels[0,:] = bel
 
@@ -134,13 +134,13 @@ def Bayes(u, z, bel = [0.5, 0.5], debug = False, plot = False):
 ## Question 1 - action = do nothing, measurement = door open
 u =  np.zeros([50,1]) # define actions 
 z = np.ones([50,1]) # define measurements
-bels = Bayes(u, z, plot = False) # run Bayes filter
+bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
 print('Q1) The robot will be 99.99% certain that the door is open after iteration ' + str(np.argmax(bels[:,1] > 0.9999)))
 
 ## Question 2 - action = do nothing, measurement = door closed
 u =  np.ones([50,1]) # define actions
 z = np.ones([50,1]) # define measurements
-bels = Bayes(u, z, plot = False) # run Bayes filter
+bels = Bayes(u, z, debug = False, plot = False) # run Bayes filter
 print('Q2) The robot will be 99.99% certain that the door is open after iteration ' + str(np.argmax(bels[:,1] > 0.9999)))
 
 ## Question 3 - action = push, measurement = door closed
