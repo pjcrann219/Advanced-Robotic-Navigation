@@ -164,3 +164,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+"""Output:
+Q1) The robot will be 99.99% certain that the door is open after iteration 9
+Q2) The robot will be 99.99% certain that the door is open after iteration 4
+Q3) The steady state belief is Open with a certainty of 100.0%
+"""
