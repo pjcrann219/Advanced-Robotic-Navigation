@@ -54,7 +54,6 @@ class Data:
         plt.ylabel('Z Measurents (m)')
         plt.show()
 
-
 class Kalman:
     def __init__(self, data, R, Q):
         self.data = data
@@ -67,14 +66,16 @@ class Kalman:
         self.bel = np.zeros([6,1])
         self.K = np.eye(3)
         self.i = 0
+        self.bels = np.zeros([self.data.length, 6]) # Record of beliefs
+        self.var = np.zeros([self.data.length, 6])  # Record of variances
 
     def execute(self):
         bel = np.zeros([self.data.length, 6])
         var = np.zeros([self.data.length, 6])
         while self.i < self.data.length:
             self.step()
-            bel[self.i-1, :] = self.bel.T
-            var[self.i-1, :] = np.diagonal(self.P)
+            self.bels[self.i-1, :] = self.bel.T
+            self.var[self.i-1, :] = np.diagonal(self.P)
             pass
         return bel, var
         
@@ -104,38 +105,29 @@ class Kalman:
         self.bel = self.bel + self.K @ (self.z - self.C @ self.bel)
         self.P = (np.eye(6) - self.K @ self.C) @ self.P
         
-R = np.eye(6) # n x n, 6x6
-Q = np.eye(3) # k x k, 3x3
+    def plot_state(self):
+        colors = ['r', 'g', 'b']
+        plt.figure()
+        plt.suptitle(self.data)
+        plt.subplot(2,1,1)
+        for i in range(3):
+            plt.plot(self.data.t, self.data.z[:,i], '.', color=colors[i])
+            plt.plot(self.data.t, self.bels[:,i], '-', color=colors[i])
+        plt.grid()
+        plt.title('Posistion vs Time')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Position (m)')
+        plt.legend({'x_measurement', 'x_bel', 'y_measurement', 'y_bel', 'z_measurement', 'z_bel'},\
+             loc='upper right')
+        
+        plt.subplot(2,1,2)
+        for i in range(3):
+            plt.plot(self.data.t,  self.bels[:,3+i], '.', color=colors[i])
+        plt.grid()
+        plt.title('Velocities')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Velocity (m/s)')
+        plt.legend({'vx', 'vy', 'vz'}, loc='upper right')
+        plt.tight_layout()
+        plt.show()
 
-mocap = Data('kalman_filter_data_mocap.txt')
-k = Kalman(mocap, R, Q)
-
-bel, var = k.execute()
-
-# plt.figure()
-# plt.plot(bel, '.')
-# plt.plot(mocap.z, '-')
-# # plt.plot([:,:], '.')
-# plt.legend({'x', 'y', 'z', 'xd', 'yd', 'zd'})
-# plt.show()
-
-colors = ['r', 'g', 'b']
-
-plt.figure()
-plt.subplot(2,1,1)
-for i in range(3):
-    plt.plot(mocap.t, mocap.z[:,i], '.', color=colors[i])
-    plt.plot(mocap.t, bel[:,i], '-', color=colors[i])
-plt.title('Posistion vs Time')
-plt.xlabel('Time (s)')
-plt.ylabel('Position (m)')
-plt.legend({'zx', 'belx', 'zy','bely', 'belz', 'zz'}, loc='upper right')
-
-plt.subplot(2,1,2)
-for i in range(3):
-    plt.plot(mocap.t,  bel[:,3+i], '.', color=colors[i])
-plt.title('Velocities')
-plt.xlabel('Time (s)')
-plt.ylabel('Velocity (m/s)')
-plt.legend({'vx', 'vy', 'vz'}, loc='upper right')
-plt.show()
