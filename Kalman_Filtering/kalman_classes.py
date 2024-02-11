@@ -98,19 +98,20 @@ class Kalman:
         plot_state(self): Plots beliefs and measurements vs time
         plot_state(self, plot_z): Plots beliefs and measurements in 3D
     """
-    def __init__(self, data, R, Q):
+    def __init__(self, data, R, Q, C=np.eye(3,6)):
         self.data = data
         self.A = []  # State Transition A
         self.B = []  # State Transition B
-        self.C = np.eye(3,6)  # Observability Matrix C
+        self.C = C  # Observability Matrix C
         self.R = R  # State Transition Covariance Matrix R
         self.Q = Q  # Measurement Covariance Matrix Q
-        self.P = np.eye(6) 
+        self.P = np.eye(6)
         self.bel = np.zeros([6,1])
         self.K = np.eye(3)
         self.i = 0
         self.bels = np.zeros([self.data.length, 6]) # Record of beliefs
         self.var = np.zeros([self.data.length, 6])  # Record of variances
+        self.pdet = np.zeros([self.data.length, 1])  # Record of variances
 
     def execute(self):
         bel = np.zeros([self.data.length, 6])
@@ -124,6 +125,7 @@ class Kalman:
             self.i += 1
             self.bels[self.i-1, :] = self.bel.T
             self.var[self.i-1, :] = np.diagonal(self.P)
+            self.pdet[self.i-1, :] = np.linalg.det(self.P)
         return bel, var
 
     def setABdt(self):
@@ -180,3 +182,12 @@ class Kalman:
             ax.plot(self.data.z[:,0], self.data.z[:,1], self.data.z[:,2], '.')
         plt.show()
 
+    def plot_Pdet(self):
+        plt.figure()
+        plt.suptitle(self.data)
+        plt.plot(self.data.t, self.pdet, '.')
+        plt.grid()
+        plt.title('Pdet vs Time')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Pdet')
+        plt.show()
