@@ -56,12 +56,14 @@ def plot_error(truth, kalmans):
         error = kalman.bels - truth.bels
         errorPos = np.linalg.norm(error[:,0:3], axis=1)
         errorVel = np.linalg.norm(error[:,3:7], axis=1)
+        avgPosError = np.mean(errorPos)
+        avgVelError = np.mean(errorVel)
 
         plt.subplot(2,1,1)
-        plt.plot(kalman.data.t, errorPos,label=str(kalman.data))
+        plt.plot(kalman.data.t, errorPos,label=str(kalman.data) + '\nAverage error = ' + str(round(avgPosError, 3)))
 
         plt.subplot(2,1,2)
-        plt.plot(kalman.data.t, errorVel,label=str(kalman.data))
+        plt.plot(kalman.data.t, errorVel,label=str(kalman.data) + '\nAverage error = ' + str(round(avgVelError, 3)))
     
     plt.subplot(2,1,1)
     plt.grid()
@@ -76,6 +78,28 @@ def plot_error(truth, kalmans):
     plt.legend()
 
     plt.suptitle('Filtered Pos and Vel errors')
+    plt.tight_layout()    
+    plt.show()
+    pass
+
+def plot_z_error(truth, kalmans):
+    plt.figure()
+
+    for i, kalman in enumerate(reversed(kalmans)):
+        error = kalman.data.z - truth.bels[:,0:3]
+        errorPos = np.linalg.norm(error, axis=1)
+        avgerror = np.mean(errorPos)
+        plt.subplot(2,1,1)
+        plt.plot(kalman.data.t, errorPos,label=str(kalman.data) + '\nAverage error = ' + str(round(avgerror, 3)))
+
+    
+    plt.subplot(2,1,1)
+    plt.grid()
+    plt.xlabel('Time (s)')
+    plt.ylabel('Position error (m)')
+    plt.legend()
+
+    plt.suptitle('Measured Pos errors')
     plt.tight_layout()    
     plt.show()
     pass

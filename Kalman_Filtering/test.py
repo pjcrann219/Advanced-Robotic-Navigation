@@ -29,34 +29,34 @@ kalmanVel = Kalman(velData, R, Q, C)
 # Execute filter
 kalmanVel.execute()
 # Plots states
-kalmanMocap.plot_state()
-# kalmanMocap.plot_state_3D()
-kalmanMocap.plot_Pdet()
+# kalmanMocap.plot_state()
+# # kalmanMocap.plot_state_3D()
+# kalmanMocap.plot_Pdet()
 
 # ''' Low Noise                                           '''
-# # Load mocapData
-# lowNoiseData = Data('kalman_filter_data_low_noise.txt')
-# # Define R and Q
-# Q =  0.1 * np.eye(3) # k x k, 3x3
-# # Define Kalman Filter
-# kalmanLow = Kalman(lowNoiseData, R, Q)
-# # Execute filter
-# kalmanLow.execute()
+# Load mocapData
+lowNoiseData = Data('kalman_filter_data_low_noise.txt')
+# Define R and Q
+Q =  0.1 * np.eye(3) # k x k, 3x3
+# Define Kalman Filter
+kalmanLow = Kalman(lowNoiseData, R, Q)
+# Execute filter
+kalmanLow.execute()
 # # Plots states
 # # kalmanLow.plot_state()
 # # kalmanLow.plot_state_3D()
 # # kalmanLow.plot_Pdet()
 
 # ''' High Noise                                           '''
-# # Load mocapData
-# highNoiseData = Data('kalman_filter_data_high_noise.txt')
-# # Define R and Q
-# Q =  0.5 * np.eye(3) # k x k, 3x3  Measurement Covariance
-# # Define Kalman Filter
-# kalmanHigh = Kalman(highNoiseData, R, Q)
-# # Execute filter
-# kalmanHigh.execute()
-# # Plots states
+# Load mocapData
+highNoiseData = Data('kalman_filter_data_high_noise.txt')
+# Define R and Q
+Q =  0.5 * np.eye(3) # k x k, 3x3  Measurement Covariance
+# Define Kalman Filter
+kalmanHigh = Kalman(highNoiseData, R, Q)
+# Execute filter
+kalmanHigh.execute()
+# Plots states
 # # kalmanHigh.plot_state()
 # # kalmanHigh.plot_state_3D()
 # # kalmanHigh.plot_Pdet()
@@ -65,3 +65,4 @@ kalmanMocap.plot_Pdet()
 # # compare_tracks([kalmanMocap, kalmanLow, kalmanHigh])
 # compare_tracks_3D([kalmanMocap, kalmanLow, kalmanHigh])
 # # plot_error(kalmanMocap, [kalmanLow, kalmanHigh])
+plot_z_error(kalmanMocap, [kalmanLow, kalmanHigh])
