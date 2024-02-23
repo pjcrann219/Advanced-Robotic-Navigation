@@ -29,7 +29,7 @@ class Data:
         self.dt = np.append(np.diff(self.t), 0)
 
     def __str__(self):
-        return self.filename
+        return str.replace(self.filename, 'data/', '')
 
     def plot_action(self):
         plt.figure()
@@ -98,7 +98,7 @@ class Kalman:
         plot_state(self): Plots beliefs and measurements vs time
         plot_state(self, plot_z): Plots beliefs and measurements in 3D
     """
-    def __init__(self, data, R, Q, C=np.eye(3,6)):
+    def __init__(self, data, R, Q, C=np.eye(3,6), measType='pos'):
         self.data = data
         self.A = []  # State Transition A
         self.B = []  # State Transition B
@@ -112,6 +112,7 @@ class Kalman:
         self.bels = np.zeros([self.data.length, 6]) # Record of beliefs
         self.var = np.zeros([self.data.length, 6])  # Record of variances
         self.pdet = np.zeros([self.data.length, 1])  # Record of variances
+        self.measType = measType
 
     def execute(self):
         bel = np.zeros([self.data.length, 6])
@@ -144,29 +145,39 @@ class Kalman:
         self.bel = self.bel + self.K @ (self.z - self.C @ self.bel)
         self.P = (np.eye(6) - self.K @ self.C) @ self.P
         
-    def plot_state(self):
+    def plot_state(self, isVel = False):
         colors = ['r', 'g', 'b']
+        names = ['x', 'y', 'z']
         plt.figure()
         plt.suptitle(self.data)
         plt.subplot(2,1,1)
         for i in range(3):
-            plt.plot(self.data.t, self.data.z[:,i], '.', color=colors[i])
-            plt.plot(self.data.t, self.bels[:,i], '-', color=colors[i])
+            if not isVel:
+                plt.plot(self.data.t, self.data.z[:,i], '.', color=colors[i], label=names[i] + ' measurement')
+            plt.plot(self.data.t, self.bels[:,i], '-', color=colors[i], label=names[i] + ' bel')
         plt.grid()
         plt.title('Posistion vs Time')
         plt.xlabel('Time (s)')
         plt.ylabel('Position (m)')
-        plt.legend({'x_measurement', 'x_bel', 'y_measurement', 'y_bel', 'z_measurement', 'z_bel'},\
-             loc='upper right')
+        plt.legend(loc='upper right')
+        # if isVel:
+        #     plt.legend({'x_bel', 'y_bel', 'z_bel'},\
+        #      loc='upper right')
+        # else:
+        #     plt.legend({'x_measurement', 'x_bel', 'y_measurement', 'y_bel', 'z_measurement', 'z_bel'},\
+        #      loc='upper right')
         
         plt.subplot(2,1,2)
         for i in range(3):
-            plt.plot(self.data.t,  self.bels[:,3+i], '.', color=colors[i])
+            if isVel:
+                plt.plot(self.data.t, self.data.z[:,i], '.', color=colors[i], label=names[i] + 'd measurement')
+            plt.plot(self.data.t,  self.bels[:,3+i], '-', color=colors[i], label=names[i] + 'd bel')
         plt.grid()
         plt.title('Velocities')
         plt.xlabel('Time (s)')
         plt.ylabel('Velocity (m/s)')
-        plt.legend({'vx', 'vy', 'vz'}, loc='upper right')
+        plt.legend(loc='upper right')
+        # plt.legend({'vx', 'vy', 'vz'}, loc='upper right')
         plt.tight_layout()
         plt.show()
 
