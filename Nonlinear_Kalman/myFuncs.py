@@ -51,29 +51,39 @@ def estimate_pose(data):
     # Distortion parameters (k1, k2, p1, p2, k3):
     distParams = np.array([-0.438607, 0.248625, 0.00072, -0.000476, -0.0911])
    
-    # Call solvePnP to calc q, p. Return results
-    success, q, p = cv2.solvePnP(np.vstack(objPoints), np.vstack(imgPoints), cameraMatrix, distParams)
+    # Call solvePnP to calc rvec and tvec.
+    success, rvec, tvec = cv2.solvePnP(np.vstack(objPoints), np.vstack(imgPoints), cameraMatrix, distParams)
 
-    # # convert Roll Pitch Yaw to Euler Angles
-    # R = rotation_matrix(q[0], q[1], q[2])
-    # euler = R.reshape((3, 3)) @ q
-
-    # Convert from camera frame to robot frame
+    # Convert from camera frame to object frame
     pOffset = np.array([[-0.04], [0.0], [-0.03]])
-    yawOffset =  - np.pi / 4
-    R_yaw = np.array([[np.cos(yawOffset), -np.sin(yawOffset), 0],
-                  [np.sin(yawOffset), np.cos(yawOffset), 0],
-                  [0, 0, 1]])
+    rMat = cv2.Rodrigues(rvec)[0]
+    tvec2 = -np.transpose(rMat) @ (tvec - pOffset)
 
-    # print(p)
-    # print(pOffset)
-    pFlip = p
-    pFlip[0] = -pFlip[0]
-    pRotated = np.dot(R_yaw, pFlip)
-    pRotated= pRotated + pOffset + np.array([[-.2], [0.035], [0]])
-    # pRotated[0] = -pRotated[0]
+    rvec2 = cv2.Rodrigues(-np.transpose(rMat))[0]
+    # eulers = np.radians(cv2.decomposeProjectionMatrix(np.hstack([R, tvec]))[-1])
+    # eulers[2] = eulers[2] + np.pi / 4
+    # print(np.linalg.inv(R))
+    pmat = np.hstack([rMat, tvec])
+    roll, pitch, yaw = cv2.decomposeProjectionMatrix(pmat)[-1]
+    yaw += 45
+    rvec3 = np.array([roll, pitch, yaw])
+    # rvec[rvec < -np.pi/2] += np.pi
+    # rvec[rvec >  np.pi/2] -= np.pi
+    # print(f"np.shape(eulers){np.shape(eulers)}")
+    # print(f"rvec2: {rvec2}")
+    # np.radians(np.array([roll, pitch, yaw + 45]))
+    # rvec[:,0][rvec[:,0] < -np.pi/2] += np.pi
+    # rvec[:,0][rvec[:,0] >  np.pi/2] -= np.pi
+    # print(np.shape(rvec))
+    # rvec[1][rvec[1] < -np.pi/4] += np.pi/2
+    # rvec[1][rvec[1] >  np.pi/4] -= np.pi/2
 
-    return success, q, p
+    rvec4 = decompR(rMat)
+    rvec4[1] -= np.pi
+    rvec4[2] -= np.pi - np.pi/4
+
+
+    return success, rvec4, tvec2
 
 def get_id_locations(id):
 # Return (x,y,0) position of 4 corners given an id
@@ -114,30 +124,31 @@ def get_id_locations(id):
 
     return locs
 
-def rotation_matrix(pitch, roll, yaw):
-    """
-    Construct the rotation matrix R given Euler angles pitch, roll, and yaw.
+def decompR(R):
+    roll = np.arcsin(R[2,1])
+    croll = np.cos(roll)
+    pitch = np.arccos(R[2,2] / croll)
+    yaw = np.arccos(R[1,1] / croll)
+
+    return np.array([roll, pitch, yaw]).T
+
+def R(pitch, roll=-1, yaw=-1):
+    if roll == -1:
+        roll = pitch[1]
+        yaw = pitch[2]
+        pitch= pitch[0]
+
+    spitch = np.sin(pitch)
+    sroll = np.sin(roll)
+    syaw = np.sin(yaw)
+    cpitch = np.cos(pitch)
+    croll = np.cos(roll)
+    cyaw = np.cos(yaw)
     
-    Parameters:
-        pitch (float): Pitch angle in radians.
-        roll (float): Roll angle in radians.
-        yaw (float): Yaw angle in radians.
-    Returns:
-        numpy.ndarray: The rotation matrix R.
-    """
-    # Calculate sine and cosine values of the angles
-    sp = np.sin(pitch)
-    sr = np.sin(roll)
-    sy = np.sin(yaw)
-    cp = np.cos(pitch)
-    cr = np.cos(roll)
-    cy = np.cos(yaw)
-    
-    # Construct the rotation matrix
-    R = np.array([[cy*sp - sr*sy*sp, -cr*cy, cy*sp + cp*sr*sy],
-                  [cp*sy + cy*sr*sp, cr*cy, sy*sp - cy*cp*sr],
-                  [-cr*sp, sr, cr*cp]])
-    
+    R = np.array([[cyaw * cpitch - sroll * syaw * spitch, -croll * syaw, cyaw * spitch + cpitch * sroll * syaw], \
+            [cpitch * syaw + cyaw * sroll * spitch, croll * cyaw, syaw * spitch - cyaw * cpitch * sroll], \
+            [-croll * spitch, sroll, croll * cpitch]])
+
     return R
 
 def plot_observation(dataPath):
@@ -223,6 +234,7 @@ def plot_observation3D(dataPath):
     plt.show()
 
 def estimate_covariance(dataPath):
+    # Load in data
     dataFull = scipy.io.loadmat(dataPath, simplify_cells=True)
 
     # Get observation values
@@ -230,6 +242,7 @@ def estimate_covariance(dataPath):
     rots = np.zeros((len(dataFull['data']), 3))
     ts = np.zeros(len(dataFull['data']))
 
+    # estimate pose
     for i in range(len(dataFull['data'])):
         data = dataFull['data'][i]
         success, q, p = estimate_pose(data)
@@ -245,9 +258,6 @@ def estimate_covariance(dataPath):
     ts   = ts[~np.isnan(poss).any(axis=1)]
     poss = poss[~np.isnan(poss).any(axis=1)]
     rots = rots[~np.isnan(rots).any(axis=1)]
-
-    # R = 
-    # rots2 = 
     
     # Get truth (mocap) points
     truth_poss = np.transpose(dataFull['vicon'][0:3, :])
@@ -255,52 +265,54 @@ def estimate_covariance(dataPath):
     truth_rots2 = np.transpose(dataFull['vicon'][3:6, :])
     truth_ts = np.transpose(dataFull['time'])
 
-    for i in range(len(truth_rots)):
-        i_rots = truth_rots[i,:]
-        R = rotation_matrix(i_rots[0], i_rots[1], i_rots[2])
-        truth_rots2[i,:] = R @ np.transpose(i_rots)
-    # euler = R.reshape((3, 3)) @ q
+    # Interpolate truth values
+    truth_poss_int =  np.zeros(np.shape(poss))
+    truth_rots_int =  np.zeros(np.shape(rots))
+    for i, t in enumerate(ts):
+        truth_poss_int[i, :] = interpTruthData(truth_poss, truth_ts, t)
+        truth_rots_int[i, :] = interpTruthData(truth_rots, truth_ts, t)
 
+    # Calculate error covariance
+    x = np.hstack((poss, rots))
+    truth_x_int = np.hstack((truth_poss_int, truth_rots_int))
+    v = (truth_x_int - x)
+    n = len(ts)
+    cov = np.dot(v.T, v)/(n-1)
+
+    # print(f"cov): {cov}")
+    # cov2 = np.cov(v, rowvar=False)
+
+    # # Plot truth and estimated pos
     plt.figure()
-    labels = ['X', 'Y', 'Z']
+    plt.subplot(2,1,1)
+    labelxyz = ['X', 'Y', 'Z']
+    labelrpy = ['roll', 'pitch', 'yaw']
     colors = ['red', 'blue', 'green']
-
     for i in range(3):
-        plt.plot(truth_ts, truth_poss[:,i], '-', label='truth'+str(labels[i]), color = colors[i])
-        plt.plot(ts, poss[:,i], '.' , label=str(labels[i]), color = colors[i])
+        plt.plot(truth_ts, truth_poss[:,i], '-', label='truth'+str(labelxyz[i]), color = colors[i])
+        plt.plot(ts, poss[:,i], '.' , label=str(labelxyz[i]), color = colors[i])
+        # plt.plot(ts, truth_poss_int[:,i], '.', label='truth'+str(labels[i]), color = colors[i])
+    plt.subplot(2,1,2)
+    for i in range(3):
+        plt.plot(truth_ts, np.degrees(truth_rots[:,i]), '-', label='truth'+str(labelrpy[i]), color = colors[i])
+        plt.plot(ts, np.degrees(rots[:,i]), '.' , label=str(labelrpy[i]), color = colors[i])
+        # plt.plot(ts, truth_poss_int[:,i], '.', label='truth'+str(labels[i]), color = colors[i])
     plt.legend()
     plt.show()
 
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
-    ax.set_xlabel('X (m)')
-    ax.set_ylabel('Y (m)')
-    ax.set_zlabel('Z (m)') 
-    ax.plot3D(truth_poss[:,0], truth_poss[:,1], truth_poss[:,2], '.r', label='Truth')
-    ax.plot3D(poss[:,0], poss[:,1], poss[:,2], '.g', label='Observations')
-    ax.view_init(elev=90, azim=0)
-    plt.title(dataPath.replace('data/', '').replace('.mat', ''))
-    plt.legend()
-    plt.show()
+    # Return cov matrix
+    return cov
 
-    # print(np.shape(rots))
-    # print(np.shape(truth_rots))
+def interpTruthData(truthX, truthT, t):
+    # truthT = np.vstack(truthT)
+    # print(f"shape(truthX[:,0]):{np.shape(truthX[:,0])}, shape(truthT):{np.shape(truthT)}, t:{(t)}")
+    # print(f"t = {t}")
+    truthT = truthT.flatten()
+    x = np.interp(t, truthT, truthX[:,0])
+    y = np.interp(t, truthT, truthX[:,1])
+    z = np.interp(t, truthT, truthX[:,2])
 
-    # plt.figure()
-    # colors = ['red', 'green', 'blue']
-    # plt.plot(truth_ts, truth_rots, '-', label=['truth Pitch', 'truth Yaw', 'truth Roll'])
-    # plt.plot(ts, rots, '.' , label=['Pitch', 'Yaw', 'Roll'])
-    # plt.legend()
-    # plt.show()
-
-    # print(np.shape(ts))
-    # print(np.shape(truth_ts))
-    # print(np.shape(np.vstack(truth_ts)))
-
-    # plt.figure()
-    # plt.plot(ts, poss)
-    # plt.show()
-
+    return np.array([x, y, z])
 
 def animateRun(dataPath):
 
@@ -338,16 +350,151 @@ def animateRun(dataPath):
 
     l = len(dataFull['data'])
     # anim = FuncAnimation(fig, updateAnimation, frames=np.arange(0, l, 1), interval=1)
-    frames=range(10)
     anim = FuncAnimation(fig, updateAnimation, frames=range(l), interval=20, repeat=False)
     plt.title(dataPath)
     plt.show()
     return anim
 
+def UKF(data, R, Q):
+    
+    X0, wm, wc = getSigmaPoints(x, P, n)
+    X1 = np.zeros(np.shape(X0))
+    for i, thisX in enumerate(X):
+        X1[:,i] = state_transition(thisX, u, dt)
+
+    x = np.sum(X1 * wm, axis=1)
+
+
+    pass
+
+def state_transition(x0, u, dt):
+
+    x1 = np.zeros(np.shape(x0))
+    g = np.array([[0], [0], [-9.81]])
+
+    # P1 = P0 + P0d * dt
+    x1[0:3] = x0[0:3] + x0[6:9] * dt
+    # q1 = q0 + Inv(G(q)) * Uw * dt
+    x1[3:6] = x0[3:6] + np.linalg.inv(G(x0[6:9])) @ u[0:3] * dt
+    # p1d = p0d + (g + R(q)*ua) * dt
+    x1[6:9] = x0[6:9] + (g + R(x0[3:6]) @ u[3:6]) * dt
+    # bg1 = bg0
+    x1[9:12] = x0[9:12]
+    # ba1 = ba0
+    x1[12:15] = x0[12:15]
+
+    return x1
+
+def measurement_model(x):
+    c = np.zeros([6,15])
+    c[0:3, 0:3] = np.eye(3)
+    c[3:6, 3:6] = np.eye(3)
+    z = c @ x
+    return z
+
+def getSigmaPoints(x, P, n):
+    x = x.flatten()
+    # Init X, i, wm, wc
+    X = np.zeros([n,2*n+1])
+    wm = np.zeros(2*n+1)
+    wc = np.zeros(2*n+1)
+
+    # constants
+    alpha = 0.001
+    k = 1
+    beta = 2
+    lam = alpha**2 * (n + k) - n
+
+    # Set point i=0
+    X[:, 0] = x
+    wm[0] = lam / (n + lam)
+    wc[0] = lam / (n + lam) * (1 - alpha**2 + beta)
+
+    # Set i=1:2n
+    offset = np.linalg.cholesky((n + lam) * P)
+    for i in range(1, n+1):
+        X[:,i] = x + offset[:, i-1]
+        X[:,n+i] = x - offset[:, i-1]
+        wm[i] = wm[n+i] = wc[i] = wc[n+i] = 0.5 / (n + lam)
+    
+    return X, wm, wc
+
+
+def G(pitch, roll=999, yaw=999):
+    if roll == 999:
+        roll = pitch[1][0]
+        yaw = pitch[2][0]
+        pitch= pitch[0][0]
+
+    # print(f'pitch: {pitch}, roll: {roll}, yaw: {yaw}')
+
+    gMat = np.array([[np.cos(pitch),0, -np.cos(roll) * np.sin(pitch)], \
+                    [0,             1, np.sin(roll)                 ], \
+                    [np.sin(pitch), 0, np.cos(roll) * np.cos(pitch) ]])
+    return gMat
+
+def R(pitch, roll=999, yaw=999):
+    if roll == 999:
+        roll = pitch[1][0]
+        yaw = pitch[2][0]
+        pitch= pitch[0][0]
+
+    spitch = np.sin(pitch)
+    sroll = np.sin(roll)
+    syaw = np.sin(yaw)
+    cpitch = np.cos(pitch)
+    croll = np.cos(roll)
+    cyaw = np.cos(yaw)
+    
+    rMat= np.array([[cyaw * cpitch - sroll * syaw * spitch, -croll * syaw, cyaw * spitch + cpitch * sroll * syaw], \
+            [cpitch * syaw + cyaw * sroll * spitch, croll * cyaw, syaw * spitch - cyaw * cpitch * sroll], \
+            [-croll * spitch, sroll, croll * cpitch]])
+
+    return rMat
+## Make and save animation
 # anim = animateRun('data/studentdata0.mat')
 # anim.save('gifs/studentdata0.gif', writer='pillow')
 
-estimate_covariance('data/studentdata0.mat')
+## Get covariance matrix R
+R = estimate_covariance('data/studentdata0.mat')
+# Q = np.eye(15) * .005
+
+x = np.ones([15,1])
+P = np.eye(15)
+n = 15
+# for i in range(1,2*n+1):
+    # print(i)
+# X, wm, wc = getSigmaPoints(x, P, n)
+# print(f"X[0,1]: {X[0,1]}, X[0,16]: {X[0,16]}")
+# plt.figure()
+# for i in range(30):
+#     plt.plot(X[1,i], X[2,i], 'x')
+
+# plt.show()
+
+# fig = plt.figure()
+# ax = plt.axes(projection='3d')
+# ax.set_xlabel('X (m)')
+# ax.set_ylabel('Y (m)')
+# ax.set_zlabel('Z (m)') 
+
+# for i in range(30):
+#     ax.plot3D(X[0,i], X[1,i], X[2,i], 'x')
+
+# ax.view_init(elev=90, azim=0)
+plt.legend()
+plt.show()
+
+# X = np.zeros([n,2*n+1])
+# for i in range(1,2*n+1):
+#     X[:, i]
+
+  
+# print(X)
+# print(x0)
+# print(state_transition(x1, u, dt))
+# print(G(np.array([[0],[0],[0]])))
+
 # plot_observation('data/studentdata0.mat')
 # plot_observation3D('data/studentdata0.mat')
 
