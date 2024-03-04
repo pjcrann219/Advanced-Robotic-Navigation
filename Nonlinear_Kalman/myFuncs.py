@@ -20,6 +20,7 @@ def estimate_pose(data):
     # If only 1 id, set imgPoints and objPoints manually
     if np.size(data['id']) == 1:
         # Set imgPoints for single ID
+        print(data['p1'])
         imgPoints[0] = tuple(data['p1'])
         imgPoints[1] = tuple(data['p2'])
         imgPoints[2] = tuple(data['p3'])
@@ -51,39 +52,55 @@ def estimate_pose(data):
     # Distortion parameters (k1, k2, p1, p2, k3):
     distParams = np.array([-0.438607, 0.248625, 0.00072, -0.000476, -0.0911])
    
-    # Call solvePnP to calc rvec and tvec.
+    # Call solvePnP to calc rvec and tvec. These are from camera to world
     success, rvec, tvec = cv2.solvePnP(np.vstack(objPoints), np.vstack(imgPoints), cameraMatrix, distParams)
 
-    # Convert from camera frame to object frame
-    pOffset = np.array([[-0.04], [0.0], [-0.03]])
-    rMat = cv2.Rodrigues(rvec)[0]
-    tvec2 = -np.transpose(rMat) @ (tvec - pOffset)
+    # Build Transformation matrix from camera to world
+    Tcam_world = np.eye(4)
+    Tcam_world[0:3, 0:3] = cv2.Rodrigues(rvec)[0]
+    Tcam_world[0:3,3] = np.squeeze(tvec)
+    Tworld_cam = invT(Tcam_world)
 
-    rvec2 = cv2.Rodrigues(-np.transpose(rMat))[0]
-    # eulers = np.radians(cv2.decomposeProjectionMatrix(np.hstack([R, tvec]))[-1])
-    # eulers[2] = eulers[2] + np.pi / 4
-    # print(np.linalg.inv(R))
-    pmat = np.hstack([rMat, tvec])
-    roll, pitch, yaw = cv2.decomposeProjectionMatrix(pmat)[-1]
-    yaw += 45
-    rvec3 = np.array([roll, pitch, yaw])
-    # rvec[rvec < -np.pi/2] += np.pi
-    # rvec[rvec >  np.pi/2] -= np.pi
-    # print(f"np.shape(eulers){np.shape(eulers)}")
-    # print(f"rvec2: {rvec2}")
-    # np.radians(np.array([roll, pitch, yaw + 45]))
-    # rvec[:,0][rvec[:,0] < -np.pi/2] += np.pi
-    # rvec[:,0][rvec[:,0] >  np.pi/2] -= np.pi
-    # print(np.shape(rvec))
-    # rvec[1][rvec[1] < -np.pi/4] += np.pi/2
-    # rvec[1][rvec[1] >  np.pi/4] -= np.pi/2
+    r2 = np.sqrt(2)
+    Timu_cam = np.array([   [ 1/r2, -1/r2,  0.0,  0.04],\
+                            [-1/r2, -1/r2,  0.0,  0.0 ],\
+                            [  0.0,   0.0, -1.0, -0.03],\
+                            [  0.0,   0.0,  0.0,  1.0 ]])
 
-    rvec4 = decompR(rMat)
-    rvec4[1] -= np.pi
-    rvec4[2] -= np.pi - np.pi/4
+    Tcam_imu = invT(Timu_cam)
 
+    Tworld_imu = Tworld_cam @ Tcam_imu
+    rvecIMU = decompR(Tworld_imu[0:3,0:3])
+    tvecIMU = Tworld_imu[0:3, 3]
+    rvecIMU[-1] *= -1
 
-    return success, rvec4, tvec2
+    return success, rvecIMU, tvecIMU
+
+def invT(T):
+    R = T[0:3,0:3]
+    p = T[0:3,3]
+    RT = R.T
+    Tinv = np.eye(4)
+    Tinv[0:3,0:3] = RT
+    Tinv[0:3, 3] = -RT @ p
+
+    return Tinv
+
+def Cam2IMU(Rcam, tcam):
+    # Rcam = 3x3 rotation matrix of camera
+    # tcam = 3x1 position of camera in world frame
+    r2i = 1.0 / np.sqrt(2.0)
+
+    rotCam2IMU = np.array([ [ r2i, -r2i,  0],\
+                            [-r2i, -r2i,  0],\
+                            [   0,    0, -1]])
+    transCam2IMU = np.array([-0.4, 0, -0.3]).T
+
+    timu = rotCam2IMU @ (tcam - transCam2IMU)
+
+    Rimu = Rcam @ rotCam2IMU
+
+    return Rimu, timu
 
 def get_id_locations(id):
 # Return (x,y,0) position of 4 corners given an id
@@ -104,6 +121,8 @@ def get_id_locations(id):
     row = int(row)
     column = int(column)
 
+    # pOffset = np.array([[-0.04], [0.0], [-0.03]])
+
     y4 = column*0.152*2
     if column >= 3:
         y4 = y4 + (0.178 - 0.152)
@@ -112,9 +131,9 @@ def get_id_locations(id):
     x4 = row*0.152*2
 
     p4= (x4, y4, 0.0)
-    p1 = tuple(np.add(p4, (0.152, 0.0  , 0.0)))
-    p2 = tuple(np.add(p4, (0.152, 0.152, 0.0)))
-    p3 = tuple(np.add(p4, (0.0,   0.152, 0.0)))
+    p1 = tuple(np.add(p4, (0.152, 0.0  , 0)))
+    p2 = tuple(np.add(p4, (0.152, 0.152, 0)))
+    p3 = tuple(np.add(p4, (0.0,   0.152, 0)))
 
     locs = np.empty((4,), dtype=object)
     locs[0] = p1
@@ -124,11 +143,18 @@ def get_id_locations(id):
 
     return locs
 
+# def decompR(R):
+#     roll = np.arcsin(R[2,1])
+#     croll = np.cos(roll)
+#     pitch = np.arccos(R[2,2] / croll)
+#     yaw = np.arccos(R[1,1] / croll)
+
+#     return np.array([roll, pitch, yaw]).T
+
 def decompR(R):
-    roll = np.arcsin(R[2,1])
-    croll = np.cos(roll)
-    pitch = np.arccos(R[2,2] / croll)
-    yaw = np.arccos(R[1,1] / croll)
+    pitch = np.arctan2(-R[2,0], np.sqrt(R[0,0]**2 + R[1,0]**2))
+    yaw = np.arctan2(-R[1,0], R[0,0])
+    roll = np.arctan2(R[2,1], R[2,2])
 
     return np.array([roll, pitch, yaw]).T
 
@@ -456,12 +482,16 @@ def R(pitch, roll=999, yaw=999):
 # anim.save('gifs/studentdata0.gif', writer='pillow')
 
 ## Get covariance matrix R
-R = estimate_covariance('data/studentdata0.mat')
+R = estimate_covariance('data/studentdata4.mat')
+# R = estimate_covariance('data/studentdata2.mat')
+# R = estimate_covariance('data/studentdata3.mat')
 # Q = np.eye(15) * .005
 
 x = np.ones([15,1])
 P = np.eye(15)
 n = 15
+
+
 # for i in range(1,2*n+1):
     # print(i)
 # X, wm, wc = getSigmaPoints(x, P, n)
@@ -481,9 +511,9 @@ n = 15
 # for i in range(30):
 #     ax.plot3D(X[0,i], X[1,i], X[2,i], 'x')
 
-# ax.view_init(elev=90, azim=0)
-plt.legend()
-plt.show()
+# # ax.view_init(elev=90, azim=0)
+# plt.legend()
+# plt.show()
 
 # X = np.zeros([n,2*n+1])
 # for i in range(1,2*n+1):

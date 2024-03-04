@@ -1,62 +1,67 @@
+import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+import scipy
 
-# # import numpy as np
-# import scipy
-# # from matplotlib import pyplot as plt
-# # from matplotlib.animation import FuncAnimation, PillowWriter
+from observationModel import *
+from unscentedKalmanFilter import *
 
-# from matplotlib.animation import FuncAnimation
-# import matplotlib.pyplot as plt
-# import numpy as np
+# np.set_printoptions(precision=3)
+np.set_printoptions(suppress=True)
+R = estimate_covariance('data/studentdata4.mat')
+Q = np.eye(15)
+# print(f"np.shape(R): {np.shape(R)}")
+# print(f"np.shape(Q): {np.shape(Q)}")
+UKF('data/studentdata4.mat', R, Q)
 
-# plt.rcParams["figure.figsize"] = [7.00, 3.50]
-# plt.rcParams["figure.autolayout"] = True
+# x = np.zeros([15,1])
+# x[0] = 1
+# x[7] = 1
+# P = np.eye(15)
+# n = 15
+# u = np.zeros([6,1])
+# # u[5] = 9.81
+# dt = 1
+# z = x[0:6]
 
-# fig, ax = plt.subplots()
+# stepUFK(x, P, u, dt, n, z)
 
-# def update(i):
-#     # im_normed = np.random.rand(6, 6)
-#     ax.imshow(data['data'][i]['img'])
-#     # ax.imshow(im_normed)
-#     ax.set_axis_off()
+# # X, wm, wc = getSigmaPoints(x, P, n)
+# # print(f"X[0,1]: {X[0,1]}, X[0,16]: {X[0,16]}")
+# # plt.figure()
+# # for i in range(30):
+# #     plt.plot(X[1,i], X[2,i], 'x')
 
-# data = scipy.io.loadmat('data/studentdata0.mat', simplify_cells=True)
-# print(len(data['data']))
-# l = len(data['data'])
-# anim = FuncAnimation(fig, update, frames=np.arange(0, l, 10), interval=1)
+# # plt.show()
+
+# # fig = plt.figure()
+# ax = plt.axes(projection='3d')
+# ax.set_xlabel('X (m)')
+# ax.set_ylabel('Y (m)')
+# ax.set_zlabel('Z (m)') 
+
+# for i in range(30):
+#     ax.plot3D(X[0,i], X[1,i], X[2,i], 'x')
+
+# # ax.view_init(elev=90, azim=0)
+# plt.legend()
 # plt.show()
 
-# # plt.ioff()
+# X = np.zeros([n,2*n+1])
+# for i in range(1,2*n+1):
+#     X[:, i]
 
-# # # ani = FuncAnimation(fig, plt.imshow(data['data'][0]['img']), frames=1000, interval=100)
+  
+# print(X)
+# print(x0)
+# print(state_transition(x1, u, dt))
+# print(G(np.array([[0],[0],[0]])))
 
-# # for i in range(len(data['data'])):
-# #     plt.imshow(data['data'][i+400]['img'])
-# #     plt.show()
+# plot_observation('data/studentdata0.mat')
+# plot_observation3D('data/studentdata0.mat')
 
-# # # plt.imshow(data['data'][0]['img'])
-# # # plt.show()
+# dataFull = scipy.io.loadmat('data/studentdata0.mat', simplify_cells=True)
 
-# # # for i in data.keys():
-# # #     print(i + ': ' + str(np.size(data[i])))
-# # #     # for j in data[i].keys():
-# # #     #     print()
+# print(get_id_locations(48))
 
-# # # print((data['data'][1]))
-
-# # # print(data['data'][-100]['acc'])
-# # # rpy = np.vstack([d['rpy'] for d in data['data']])
-# # # drpy = np.vstack([d['drpy'] for d in data['data']])
-# # # acc = np.vstack([d['acc'] for d in data['data']])
-# # # t = [d['t'] for d in data['data']]
-
-# # # plt.figure()
-# # # plt.subplot(3,1,1)
-# # # plt.plot(t, rpy, '.')
-# # # plt.subplot(3,1,2)
-# # # plt.plot(t, drpy, '.')
-# # # plt.subplot(3,1,3)
-# # # plt.plot(t, acc, '.')
-# # # plt.show()
-# # # # print(data['data'][0]['t'])
-# # # # save 
+# 3.496, 2.636
