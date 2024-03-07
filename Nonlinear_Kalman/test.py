@@ -7,13 +7,58 @@ from observationModel import *
 from unscentedKalmanFilter import *
 
 # np.set_printoptions(precision=3)
+dataPath = 'data/studentdata4.mat'
 np.set_printoptions(suppress=True)
-R = estimate_covariance('data/studentdata4.mat')
+R = estimate_covariance(dataPath)
 Q = np.eye(15)
 # print(f"np.shape(R): {np.shape(R)}")
 # print(f"np.shape(Q): {np.shape(Q)}")
-UKF('data/studentdata4.mat', R, Q)
+x, t = UKF(dataPath, 1*R, .1*Q)
 
+data = scipy.io.loadmat(dataPath, simplify_cells=True)
+truth = data['vicon']
+truth_t = data['time']
+
+
+plt.figure()
+plt.subplot(4,1,1)
+plt.plot(truth_t, truth[0,:], 'r-')
+plt.plot(truth_t, truth[1,:], 'b-')
+plt.plot(truth_t, truth[2,:], 'g-')
+plt.plot(t, x[0,:], 'r.')
+plt.plot(t, x[1,:], 'b.')
+plt.plot(t, x[2,:], 'g.')
+
+plt.title('Position')
+
+plt.subplot(4,1,2)
+plt.plot(truth_t, truth[3,:], 'r-')
+plt.plot(truth_t, truth[4,:], 'b-')
+plt.plot(truth_t, truth[5,:], 'g-')
+plt.plot(t, x[3,:], 'r.')
+plt.plot(t, x[4,:], 'b.')
+plt.plot(t, x[5,:], 'g.')
+plt.title('Roll Pitch Yaw')
+
+plt.subplot(4,1,3)
+plt.plot(truth_t, truth[6,:], 'r-')
+plt.plot(truth_t, truth[7,:], 'b-')
+plt.plot(truth_t, truth[8,:], 'g-')
+plt.plot(t, x[6,:], 'r.')
+plt.plot(t, x[7,:], 'b.')
+plt.plot(t, x[8,:], 'g.')
+plt.title('Velocities')
+
+plt.subplot(4,1,4)
+plt.plot(t, x[9,:], 'r.')
+plt.plot(t, x[10,:], 'b.')
+plt.plot(t, x[11,:], 'g.')
+plt.plot(t, x[12,:], 'r-')
+plt.plot(t, x[13,:], 'b-')
+plt.plot(t, x[14,:], 'g-')
+plt.title('Bias')
+
+plt.show()
 # x = np.zeros([15,1])
 # x[0] = 1
 # x[7] = 1

@@ -86,8 +86,18 @@ def estimate_pose(data):
     rvecIMU = decompR(Tworld_imu[0:3,0:3])
     tvecIMU = Tworld_imu[0:3, 3]
     rvecIMU[-1] *= -1
-
     return success, rvecIMU, tvecIMU
+
+    # Tworld_imu2 = invT(Tworld_cam @ Tcam_imu)
+    # rvec_imu2 = decompR(Tworld_imu2[0:3, 0:3])
+    # tvec_imu2 = Tworld_imu2[0:3, 3]
+
+    # print(f"rvecIMU: {rvecIMU}")
+    # print(f"rvec_imu2: {rvec_imu2}")
+    # print(f"tvecIMU: {tvecIMU}")
+    # print(f"tvec_imu2: {tvec_imu2}")
+    # rvec_imu2[-1] *= -1
+    # return success, rvec_imu2, tvec_imu2
 
 def invT(T):
     R = T[0:3,0:3]

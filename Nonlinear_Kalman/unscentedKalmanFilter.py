@@ -12,13 +12,18 @@ def UKF(dataPath, R, Q):
     x = np.zeros([15,1])
     P = np.eye(15)
 
+    xs = np.zeros([15, len(data)])
+    ts = np.zeros([len(data), 1])
+
     zold = x[0:6]
     # print(f"zold: {zold}, np.shape(zold): {np.shape(zold)}")
 
     last_t = 0
     for i in range(len(data)):
-        print(f"i: {i}/{len(data)}")
-        dt = data[i]['t'] - last_t
+        # print(f"i: {i}/{len(data)}")
+        t = data[i]['t']
+        # print(f"i: {i}/{len(data)}\t t: {t}")
+        dt = t - last_t
         success, rvecIMU, tvecIMU = estimate_pose(data[i])
         if success:
             z = np.concatenate((tvecIMU, rvecIMU.T)).reshape(-1,1)
@@ -31,16 +36,18 @@ def UKF(dataPath, R, Q):
             z = x[0:6]
             u = np.concatenate((uw, ua)).reshape(-1,1)
             x, P = stepUFK(x, P, u, dt, n, z, 100*R, Q)
-
-        last_t = data[i]['t']
-    pass
+        xs[:,i] = np.squeeze(x)
+        ts[i] = t
+        last_t = t
+    
+    return xs, ts
 
 def stepUFK(x, P, u, dt, n, measurement, R = np.eye(6), Q = np.eye(15)):
     # Step through a single time step of UKF
-    print("1)")
-    if not is_positive_semidefinite(P):
-        print(P)
-        print(f"x: {x}, u: {u}, dt: {dt}, n = {n}, measurement: {measurement}")
+    # print("1)")
+    # if not is_positive_semidefinite(P):
+    #     print(P)
+    #     print(f"x: {x}, u: {u}, dt: {dt}, n = {n}, measurement: {measurement}")
     # Get sigma points X0 with wights wm, wc
     X0, wm, wc = getSigmaPoints(x, P, n)
 
@@ -74,8 +81,8 @@ def stepUFK(x, P, u, dt, n, measurement, R = np.eye(6), Q = np.eye(15)):
         P += wc[i] * d @ d.T
     P += Q
 
-    print("2)")
-    is_positive_semidefinite(P)
+    # print("2)")
+    # is_positive_semidefinite(P)
     # Get new sigma points
     X2, wm, wc = getSigmaPoints(x, P, n)
 
@@ -112,12 +119,12 @@ def stepUFK(x, P, u, dt, n, measurement, R = np.eye(6), Q = np.eye(15)):
     # Update estimate
     x = x.reshape(-1,1) + K @ (measurement - np.vstack(z))
     # Update variance
-    print("3)")
-    is_positive_semidefinite(P)
+    # print("3)")
+    # is_positive_semidefinite(P)
     # P = P - K @ S @ np.linalg.pinv(K)
     P = P - K @ S @ np.transpose(K)
-    print("4)")
-    is_positive_semidefinite(P)
+    # print("4)")
+    # is_positive_semidefinite(P)
 
     return x, P
 
@@ -138,14 +145,25 @@ def state_transition(x0, u, dt):
 
     x1 = np.zeros(np.shape(x0))
     g = np.array([[0], [0], [-9.81]])
-    g[2] = 0
+    # g[2] = 0
+
+    Rmat = R(x0[3:6])
 
     # P1 = P0 + P0d * dt
     x1[0:3] = x0[0:3] + x0[6:9] * dt
     # q1 = q0 + Inv(G(q)) * Uw * dt
-    x1[3:6] = x0[3:6] + np.squeeze(np.linalg.inv(G(x0[6:9])) @ u[0:3] * dt)
+    # x1[3:6] = x0[3:6] + np.squeeze(np.linalg.inv(G(x0[6:9])) @ u[0:3] * dt)
+    x1[3:6] = x0[3:6] + np.squeeze(np.linalg.inv(G(x0[6:9])) @ (u[0:3] - x0[9:12, np.newaxis]) * dt)
     # p1d = p0d + (g + R(q)*ua) * dt
-    x1[6:9] = x0[6:9] + np.squeeze((g + R(x0[3:6]) @ u[3:6]) * dt)
+    # x1[6:9] = x0[6:9] + np.squeeze((g + R(x0[3:6]) @ u[3:6]) * dt)
+    # print(f"x0: {x0}")
+    # print(f"u: {u}")
+    # print(f"Rmat: {Rmat}")
+    # print(f"(u[3:6] - x0[12:15]): {(u[3:6] - x0[12:15])}")
+    # print(f"(Rmat + np.eye(3): {(Rmat + np.eye(3))}")
+    # print(f"np.reshape(x0[12:15],(3,1)): {np.reshape(x0[12:15],(3,1))}")
+    # print(f"x0[12:15]: {x0[12:15]}")
+    x1[6:9] = x0[6:9] + np.squeeze((Rmat @ Rmat @ (u[3:6] - np.reshape(x0[12:15],(3,1)))*dt)) + np.squeeze((Rmat + np.eye(3))@g * dt)
     # bg1 = bg0
     x1[9:12] = x0[9:12]
     # ba1 = ba0
@@ -182,7 +200,11 @@ def getSigmaPoints(x, P, n):
     # print(f"np.shape(P): {np.shape(P)}")
     # print(f"P: {P}")
     # print(f"(n + lam) * P: P{(n + lam) * P}")
-    offset = np.linalg.cholesky((n + lam) * P)
+    # offset = np.linalg.cholesky((n + lam) * P) # Doesnt work :(
+    offset = scipy.linalg.sqrtm((n + lam) * P) # WORKS
+    # L, D, _ = scipy.linalg.ldl((n + lam) * P) # WORKS
+    # offset = L @ scipy.linalg.sqrtm(D)
+    
     for i in range(1, n+1):
         X[:,i] = x + offset[:, i-1]
         X[:,n+i] = x - offset[:, i-1]
