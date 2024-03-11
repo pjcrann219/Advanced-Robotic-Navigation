@@ -10,6 +10,7 @@ def UKF(dataPath, R, Q):
     n = 15
 
     x = np.zeros([15,1])
+    # x[14] = -9.81
     P = np.eye(15)
 
     xs = np.zeros([15, len(data)])
@@ -30,26 +31,21 @@ def UKF(dataPath, R, Q):
             uw = data[i]['omg']
             ua = data[i]['acc']
             u = np.concatenate((uw, ua)).reshape(-1,1)
-            x, P = stepUFK(x, P, u, dt, n, z, R, Q)
+            x, P = stepUFK(x, P, u, dt, n, z, t, R, Q)
         else:
-            print("FAILLLLLLLLLLL")
             z = x[0:6]
             u = np.concatenate((uw, ua)).reshape(-1,1)
-            x, P = stepUFK(x, P, u, dt, n, z, 100*R, Q)
+            x, P = stepUFK(x, P, u, dt, n, z, 100*R, Q, t)
         xs[:,i] = np.squeeze(x)
         ts[i] = t
         last_t = t
     
     return xs, ts
 
-def stepUFK(x, P, u, dt, n, measurement, R = np.eye(6), Q = np.eye(15)):
-    # Step through a single time step of UKF
-    # print("1)")
-    # if not is_positive_semidefinite(P):
-    #     print(P)
-    #     print(f"x: {x}, u: {u}, dt: {dt}, n = {n}, measurement: {measurement}")
+def stepUFK(x, P, u, dt, n, measurement, t, R = np.eye(6), Q = np.eye(15)):
+
     # Get sigma points X0 with wights wm, wc
-    X0, wm, wc = getSigmaPoints(x, P, n)
+    X0, wm, wc = getSigmaPoints(x, P, n, t)
 
     # Propogate sigma points through state transition
     X1 = np.zeros(np.shape(X0))
@@ -62,7 +58,7 @@ def stepUFK(x, P, u, dt, n, measurement, R = np.eye(6), Q = np.eye(15)):
     # Recover variance
     diff = X1-np.vstack(x)
     # diff = X1 - np.vstack(x)[:, np.newaxis]
-    # print(f"np.shape(diff): {np.shape(diff)}")
+
     P = np.zeros((15, 15))
     # d = diff[:, 0].reshape(-1,1)
     # print(f"d: {d}")
@@ -84,7 +80,7 @@ def stepUFK(x, P, u, dt, n, measurement, R = np.eye(6), Q = np.eye(15)):
     # print("2)")
     # is_positive_semidefinite(P)
     # Get new sigma points
-    X2, wm, wc = getSigmaPoints(x, P, n)
+    X2, wm, wc = getSigmaPoints(x, P, n, t)
 
     # Put sigma points through measurement model
     Z = np.zeros([6,2*n+1])
@@ -142,34 +138,36 @@ def is_positive_semidefinite(matrix):
     
 
 def state_transition(x0, u, dt):
+    # Calc rotation matrix R and gravity matrix G
+    rMat = R(x0[3:6])
+    gMat = G(x0[3:6])
 
+    # Convert to 2d array for easier linalg
+    x0 = x0.reshape((15,1))
+
+    # Initialize xd and x1
+    xd = np.zeros(np.shape(x0))
     x1 = np.zeros(np.shape(x0))
+
+    # init g
     g = np.array([[0], [0], [-9.81]])
-    # g[2] = 0
 
-    Rmat = R(x0[3:6])
+    # Build xd
+    xd[0:3]   = x1[6:9]
+    # xd[3:6]   = np.linalg.inv(gMat) @ (u[0:3] + x0[9:12])
+    # xd[6:9]   = g + rMat @ (u[3:6] + x0[12:15])
+    # xd[3:6]   = gMat.T @ (u[0:3] - x0[9:12])
+    # xd[6:9]   = rMat @ rMat @ (u[3:6]-g) + rMat @ g
+    xd[3:6]   = np.linalg.inv(gMat) @ (u[0:3] - x0[9:12])
+    xd[6:9]   = rMat @ (u[3:6] - x0[12:15]) + g
+    xd[9:12]  = np.zeros((3,1))
+    xd[12:15] = np.zeros((3,1))
 
-    # P1 = P0 + P0d * dt
-    x1[0:3] = x0[0:3] + x0[6:9] * dt
-    # q1 = q0 + Inv(G(q)) * Uw * dt
-    # x1[3:6] = x0[3:6] + np.squeeze(np.linalg.inv(G(x0[6:9])) @ u[0:3] * dt)
-    x1[3:6] = x0[3:6] + np.squeeze(np.linalg.inv(G(x0[6:9])) @ (u[0:3] - x0[9:12, np.newaxis]) * dt)
-    # p1d = p0d + (g + R(q)*ua) * dt
-    # x1[6:9] = x0[6:9] + np.squeeze((g + R(x0[3:6]) @ u[3:6]) * dt)
-    # print(f"x0: {x0}")
-    # print(f"u: {u}")
-    # print(f"Rmat: {Rmat}")
-    # print(f"(u[3:6] - x0[12:15]): {(u[3:6] - x0[12:15])}")
-    # print(f"(Rmat + np.eye(3): {(Rmat + np.eye(3))}")
-    # print(f"np.reshape(x0[12:15],(3,1)): {np.reshape(x0[12:15],(3,1))}")
-    # print(f"x0[12:15]: {x0[12:15]}")
-    x1[6:9] = x0[6:9] + np.squeeze((Rmat @ Rmat @ (u[3:6] - np.reshape(x0[12:15],(3,1)))*dt)) + np.squeeze((Rmat + np.eye(3))@g * dt)
-    # bg1 = bg0
-    x1[9:12] = x0[9:12]
-    # ba1 = ba0
-    x1[12:15] = x0[12:15]
+    # x_t+1 = x_t + xd_t * dt
+    x1 = x0 + xd * dt
 
-    return x1
+    # Return a 1d array
+    return np.squeeze(x1)
 
 def measurement_model(x):
     c = np.zeros([6,15])
@@ -178,7 +176,7 @@ def measurement_model(x):
     z = c @ x
     return z
 
-def getSigmaPoints(x, P, n):
+def getSigmaPoints(x, P, n, t):
     x = x.flatten()
     # Init X, i, wm, wc
     X = np.zeros([n,2*n+1])
@@ -200,10 +198,13 @@ def getSigmaPoints(x, P, n):
     # print(f"np.shape(P): {np.shape(P)}")
     # print(f"P: {P}")
     # print(f"(n + lam) * P: P{(n + lam) * P}")
-    # offset = np.linalg.cholesky((n + lam) * P) # Doesnt work :(
-    offset = scipy.linalg.sqrtm((n + lam) * P) # WORKS
+    offset = np.linalg.cholesky((n + lam) * P) # Doesnt work :(
+    # offset = scipy.linalg.sqrtm((n + lam) * P) # WORKS
     # L, D, _ = scipy.linalg.ldl((n + lam) * P) # WORKS
     # offset = L @ scipy.linalg.sqrtm(D)
+
+    if np.imag(offset).any():
+        print(f"Negative offset at t: {t}")
     
     for i in range(1, n+1):
         X[:,i] = x + offset[:, i-1]
@@ -214,16 +215,31 @@ def getSigmaPoints(x, P, n):
 
 
 def G(rpy):
-    roll = rpy[0]
-    pitch = rpy[1]
-    # print(f'pitch: {pitch}, roll: {roll}, yaw: {yaw}')
+    """
+    Construct the gravity matrix from roll and pitch angles.
+    Parameters:
+        rpy (array-like): Array containing roll pitch yaw angles in radians.
+    Returns:
+        gMat (numpy.ndarray): 3x3 matrix representing the gravity vector.
+    """
+    roll, pitch, _ = rpy
 
     gMat = np.array([[np.cos(pitch),0, -np.cos(roll) * np.sin(pitch)], \
-                    [0,             1, np.sin(roll)                 ], \
-                    [np.sin(pitch), 0, np.cos(roll) * np.cos(pitch) ]])
+                    [0,             1,                  np.sin(roll)], \
+                    [np.sin(pitch), 0,  np.cos(roll) * np.cos(pitch)]])
     return gMat
 
 def R(rpy):
+    """
+    Construct a rotation matrix from roll, pitch, and yaw angles.
+
+    Parameters:
+        rpy (np.ndarray): Array containing roll, pitch, and yaw angles in radians.
+
+    Returns:
+        rMat (np.ndarray): 3x3 rotation matrix.
+    """
+    roll, pitch, yaw = rpy
     roll = rpy[0]
     pitch = rpy[1]
     yaw = rpy[2]
@@ -240,3 +256,50 @@ def R(rpy):
             [-croll * spitch, sroll, croll * cpitch]])
 
     return rMat
+
+def capPi(angles):
+    print(f"angles1: {angles}")
+    if isinstance(angles, float):
+        if angles > np.pi:
+            anglescap = angles - 2*np.pi
+        elif angles < -np.pi:
+            anglescap = angles + 2*np.pi
+        else:
+            anglescap = angles
+    elif isinstance(angles, np.ndarray):
+        anglescap = np.zeros(np.size(angles))
+        for i, angle in enumerate(angles):
+            if angle > np.pi:
+                anglescap[i] = angle - 2*np.pi
+            elif angle < -np.pi:
+                anglescap[i] = angle + 2*np.pi
+            else:
+                anglescap[i] = angle
+    else:
+        anglescap = -999
+
+    return anglescap
+
+def cap2Pi(angles):
+    if isinstance(angles, float):
+        if angles > 2*np.pi:
+            anglescap = angles - 2*np.pi
+        elif angles < -2*np.pi:
+            anglescap = angles + 2*np.pi
+        else:
+            anglescap = angles
+    elif isinstance(angles, np.ndarray):
+        anglescap = np.zeros(np.size(angles))
+        for i, angle in enumerate(angles):
+            if angle > 2*np.pi:
+                anglescap[i] = angle - 2*np.pi
+            elif angle < -2*np.pi:
+                anglescap[i] = angle + 2*np.pi
+            else:
+                anglescap[i] = angle
+    else:
+        anglescap = -999
+
+    return anglescap
+
+        

@@ -74,32 +74,36 @@ def estimate_pose(data):
     Tcam_world[0:3,3] = np.squeeze(tvec)
     Tworld_cam = invT(Tcam_world)
 
+    # T from IMU to Camera
     r2 = np.sqrt(2)
-    Timu_cam = np.array([   [ 1/r2, -1/r2,  0.0,  0.04],\
+    Timu_cam = np.array([   [ 1/r2, -1/r2,  0.0, -0.04],\
                             [-1/r2, -1/r2,  0.0,  0.0 ],\
-                            [  0.0,   0.0, -1.0, -0.03],\
+                            [  0.0,   0.0, -1.0, -0.09],\
                             [  0.0,   0.0,  0.0,  1.0 ]])
 
+    # T from camera to IMU
     Tcam_imu = invT(Timu_cam)
 
+    # T from world to IMU
     Tworld_imu = Tworld_cam @ Tcam_imu
+
+    # Decompose rvecIMU and tvecIMU
     rvecIMU = decompR(Tworld_imu[0:3,0:3])
     tvecIMU = Tworld_imu[0:3, 3]
-    rvecIMU[-1] *= -1
+
     return success, rvecIMU, tvecIMU
 
-    # Tworld_imu2 = invT(Tworld_cam @ Tcam_imu)
-    # rvec_imu2 = decompR(Tworld_imu2[0:3, 0:3])
-    # tvec_imu2 = Tworld_imu2[0:3, 3]
-
-    # print(f"rvecIMU: {rvecIMU}")
-    # print(f"rvec_imu2: {rvec_imu2}")
-    # print(f"tvecIMU: {tvecIMU}")
-    # print(f"tvec_imu2: {tvec_imu2}")
-    # rvec_imu2[-1] *= -1
-    # return success, rvec_imu2, tvec_imu2
-
 def invT(T):
+    """
+    Computes the inverse of a homogeneous transformation matrix.
+
+    Parameters:
+        T (numpy.ndarray): 4x4 homogeneous transformation matrix.
+
+    Returns:
+        Tiniv (numpy.ndarray): Inverse of the input homogeneous transformation matrix.
+    """
+
     R = T[0:3,0:3]
     p = T[0:3,3]
     RT = R.T
@@ -120,7 +124,8 @@ def get_id_locations(id):
     - locs (numpy.ndarray): A 1D numpy array containing tuples representing the (x, y, z) positions
                             of the four corners of the QR code in the world coordinate system.
     """
-# Return (x,y,0) position of 4 corners given an id
+
+    # Code ID map
     idMap = np.array([
         [0, 12, 24, 36, 48, 60, 72, 84,  96],
         [1, 13, 25, 37, 49, 61, 73, 85,  97],
@@ -134,10 +139,13 @@ def get_id_locations(id):
         [9, 21, 33, 45, 57, 69, 81, 93, 105],
         [10, 22, 34, 46, 58, 70, 82, 94, 106],
         [11, 23, 35, 47, 59, 71, 83, 95, 107]])
+
+    # Find the row and column of the ID in the map
     row, column = np.where(idMap == id)
     row = int(row)
     column = int(column)
 
+    # Calculate y4 and x4 positions
     y4 = column*0.152*2
     if column >= 3:
         y4 = y4 + (0.178 - 0.152)
@@ -145,11 +153,13 @@ def get_id_locations(id):
         y4 = y4 + (0.178 - 0.152)
     x4 = row*0.152*2
 
+    # Define the corner positions
     p4= (x4, y4, 0.0)
     p1 = tuple(np.add(p4, (0.152, 0.0  , 0)))
     p2 = tuple(np.add(p4, (0.152, 0.152, 0)))
     p3 = tuple(np.add(p4, (0.0,   0.152, 0)))
 
+    # Store corner positions in a numpy array
     locs = np.empty((4,), dtype=object)
     locs[0] = p1
     locs[1] = p2
@@ -169,13 +179,24 @@ def decompR(R):
     - euler_angles (numpy.ndarray): A 1D numpy array containing the Euler angles (roll, pitch, yaw)
                                     in radians corresponding to the given rotation matrix R.
     """
-    pitch = np.arctan2(-R[2,0], np.sqrt(R[0,0]**2 + R[1,0]**2))
-    yaw = np.arctan2(-R[1,0], R[0,0])
-    roll = np.arctan2(R[2,1], R[2,2])
+    yaw = np.arctan2(-R[0,1], R[1,1])
+    roll = np.arctan2(R[2,1]*np.cos(yaw), R[1,1])
+    pitch = np.arctan2(-R[2,0], R[2,2])
 
-    return np.array([roll, pitch, yaw]).T
+    euler_angles = np.array([roll, pitch, yaw]).T
 
-def estimate_covariance(dataPath):
+    return euler_angles
+
+def plot_observations(dataPath):
+    """
+    Plots observed and ground truth positions and orientations from given data.
+
+    Parameters:
+        dataPath (str): Path to the data file.
+
+    Returns:
+        None
+    """
     # Load in data
     dataFull = scipy.io.loadmat(dataPath, simplify_cells=True)
 
@@ -184,10 +205,66 @@ def estimate_covariance(dataPath):
     rots = np.zeros((len(dataFull['data']), 3))
     ts = np.zeros(len(dataFull['data']))
 
-    # Data.rpy
-    datarpy = np.zeros([len(dataFull['data']), 3])
     for i in range(len(dataFull['data'])):
-        datarpy[i, :] = dataFull['data'][i]['rpy']
+        data = dataFull['data'][i]
+        success, q, p = estimate_pose(data)
+        ts[i] = data['t']
+        if success:
+            poss[i] = np.transpose(p)
+            rots[i] = np.transpose(q)
+        else:
+            poss[i] = np.nan
+            rots[i] = np.nan
+    
+    # Clean observation points with no values
+    ts   = ts[~np.isnan(poss).any(axis=1)]
+    poss = poss[~np.isnan(poss).any(axis=1)]
+    rots = rots[~np.isnan(rots).any(axis=1)]
+    
+    # Get truth (mocap) points
+    truth_poss = np.transpose(dataFull['vicon'][0:3, :])
+    truth_rots = np.transpose(dataFull['vicon'][3:6, :])
+    truth_ts = np.transpose(dataFull['time'])
+
+    # Plot truth and observed pos
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.title(dataPath)
+    labelxyz = ['X', 'Y', 'Z']
+    labelrpy = ['roll', 'pitch', 'yaw']
+    colors = ['red', 'blue', 'green']
+    for i in range(3):
+        plt.plot(truth_ts, truth_poss[:,i], '-', label='truth'+str(labelxyz[i]), color = colors[i])
+        plt.plot(ts, poss[:,i], '.' , label=str(labelxyz[i]), color = colors[i])
+    plt.xlabel('Time(s)')
+    plt.ylabel('Position (m)')
+    plt.legend()
+    plt.subplot(2,1,2)
+    for i in range(3):
+        plt.plot(truth_ts, np.degrees(truth_rots[:,i]), '-', label='truth'+str(labelrpy[i]), color = colors[i])
+        plt.plot(ts, np.degrees(rots[:,i]), '.' , label=str(labelrpy[i]), color = colors[i])
+    plt.xlabel('Time(s)')
+    plt.ylabel('Euler Angles (deg)')
+    plt.legend()
+    plt.show(block=False)
+
+def estimate_covariance(dataPath):
+    """
+    Estimates the covariance matrix of observed positions and orientations.
+
+    Parameters:
+        dataPath (str): Path to the data file.
+
+    Returns:
+        numpy.ndarray: Covariance matrix of the observed positions and orientations.
+    """
+    # Load in data
+    dataFull = scipy.io.loadmat(dataPath, simplify_cells=True)
+
+    # Get observation values
+    poss = np.zeros((len(dataFull['data']), 3))
+    rots = np.zeros((len(dataFull['data']), 3))
+    ts = np.zeros(len(dataFull['data']))
 
     # estimate pose
     for i in range(len(dataFull['data'])):
@@ -209,7 +286,6 @@ def estimate_covariance(dataPath):
     # Get truth (mocap) points
     truth_poss = np.transpose(dataFull['vicon'][0:3, :])
     truth_rots = np.transpose(dataFull['vicon'][3:6, :])
-    truth_rots2 = np.transpose(dataFull['vicon'][3:6, :])
     truth_ts = np.transpose(dataFull['time'])
 
     # Interpolate truth values
@@ -226,23 +302,6 @@ def estimate_covariance(dataPath):
     n = len(ts)
     cov = np.dot(v.T, v)/(n-1)
 
-    # # # Plot truth and estimated pos
-    # plt.figure()
-    # plt.subplot(2,1,1)
-    # labelxyz = ['X', 'Y', 'Z']
-    # labelrpy = ['roll', 'pitch', 'yaw']
-    # colors = ['red', 'blue', 'green']
-    # for i in range(3):
-    #     plt.plot(truth_ts, truth_poss[:,i], '-', label='truth'+str(labelxyz[i]), color = colors[i])
-    #     plt.plot(ts, poss[:,i], '.' , label=str(labelxyz[i]), color = colors[i])
-    # plt.subplot(2,1,2)
-    # for i in range(3):
-    #     plt.plot(truth_ts, np.degrees(truth_rots[:,i]), '-', label='truth'+str(labelrpy[i]), color = colors[i])
-    #     plt.plot(ts, np.degrees(rots[:,i]), '.' , label=str(labelrpy[i]), color = colors[i])
-    # plt.legend()
-    # plt.show()
-
-    # Return cov matrix
     return cov
 
 def interpTruthData(truthX, truthT, t):
@@ -259,17 +318,11 @@ def interpTruthData(truthX, truthT, t):
     Returns:
     - interpTruth (numpy.ndarray): A 1D numpy array containing the estimated states at time t.
     """
+    
     truthT = truthT.flatten()
     x = np.interp(t, truthT, truthX[:,0])
     y = np.interp(t, truthT, truthX[:,1])
     z = np.interp(t, truthT, truthX[:,2])
     interpTruth = np.array([x, y, z])
+
     return interpTruth
-
-
-# data_paths = [""] * 8
-# for i in range(8):
-#     data_paths[i] = 'data/studentdata' + str(i) + '.mat'
-
-# for i, path in enumerate(data_paths):
-#     estimate_covariance(path)
