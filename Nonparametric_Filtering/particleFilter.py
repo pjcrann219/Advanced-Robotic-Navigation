@@ -8,13 +8,21 @@ class ParticleFilter:
     def __init__(self, dataPath, M = 1000):
         # Init run info
         self.dataPath = dataPath # set dataPath
-        self.data = scipy.io.loadmat(dataPath, simplify_cells=True)['data'] # Load data
+        dataFull = scipy.io.loadmat(dataPath, simplify_cells=True) # Load data
+        self.data = dataFull['data']
+        self.truth_x = dataFull['vicon']
+        self.truth_t = dataFull['time']
         self.M = M  # set M, number of particles
         self.n = 15 # set n, number of states
         self.Q = np.eye(15) * 0.0001 # set process noise covariance
+        self.R = np.eye(6) * 0.01
         self.C = np.zeros([6,15]) # set observability matrix C
         self.C[0:3, 0:3] = np.eye(3)
         self.C[3:6, 3:6] = np.eye(3)
+        self.X_bar = np.zeros((self.n, 1))
+        self.X_hist = np.zeros((np.size(self.data), self.n))
+        self.t_hist = np.zeros((np.size(self.data), 1))
+        
 
         # Init X's and weights
         self.X = np.zeros((self.M, self.n)) # 1000x15 X_m's
@@ -43,13 +51,15 @@ class ParticleFilter:
 
             # read measurement
             success, rvecIMU, tvecIMU = estimate_pose(_data)
-            if success: #and i < 100:
+            if success and i < 200:
                 self.z = np.vstack((tvecIMU, rvecIMU)).reshape(-1, 1)
 
                 # If we get a measurement, then step UKF
                 self.stepUKF()
 
-        
+            self.X_hist[i, :] = self.X_bar
+            self.t_hist[i] = self.t
+
 
     def stepUKF(self):
         print(f"i: {self.i}/{np.size(self.data)} t: {self.t}")
@@ -57,8 +67,8 @@ class ParticleFilter:
         self.computeWeights()
         self.X_bar = np.dot(self.w.T, self.X)[0]
         self.lowVarianceSampling()
-        print(f"self.X_bar: {self.X_bar}")
-        self.plotPosDist()
+        # print(f"self.X_bar[0:3,1]: {self.X_bar[0:3]}")
+        # self.plotPosDist()
         # Method 2
         pass
 
@@ -92,7 +102,7 @@ class ParticleFilter:
         plt.subplot(3,1,3)
         plt.xlim([-0.5,3])
 
-        plt.pause(0.1)
+        plt.pause(0.01)
         
     def plotPos2d(self):
         for m in range(self.M):
@@ -127,8 +137,35 @@ class ParticleFilter:
             # TODO: include rest of gaussion dist equation?
             # likelihoods = np.exp(-0.5 * np.sum((self.z - z_predicted)**2)).reshape(1,1)
             self.w[m] = np.exp(-0.5 * np.sum((self.z - z_predicted)**2)).reshape(1,1)
-
+            # Compute the weighted residual
+            # residual = self.z - z_predicted
+            # self.w[m] = np.dot(residual.T, np.linalg.inv(self.R)).dot(residual)
+        print(f"np.sum(self.w): {np.sum(self.w)}")
         self.w /= np.sum(self.w)
+        print(f"np.sum(self.w): {np.sum(self.w)}")
+
+    def plotResults(self):
+        plt.figure()
+        plt.suptitle(self.dataPath + '\nM = ' + str(self.M))
+        plt.subplot(3,1,1)
+        plt.plot(self.truth_t, self.truth_x[0,:], '-k', label='truth')
+        plt.plot(self.t_hist, self.X_hist[:,0], 'r.', label='filtered')
+        plt.xlabel('Time')
+        plt.ylabel('X (m)')
+
+        plt.subplot(3,1,2)
+        plt.plot(self.truth_t, self.truth_x[1,:], '-k', label='truth')
+        plt.plot(self.t_hist, self.X_hist[:,1], 'r.', label='filtered')
+        plt.xlabel('Time')
+        plt.ylabel('Y (m)')
+
+        plt.subplot(3,1,3)
+        plt.plot(self.truth_t, self.truth_x[2,:], '-k', label='truth')
+        plt.plot(self.t_hist, self.X_hist[:,2], 'r.', label='filtered')
+        plt.xlabel('Time')
+        plt.ylabel('Z (m)')
+
+        plt.show()
 
     def getRmatGmat(self, x0):
 
@@ -174,6 +211,5 @@ class ParticleFilter:
             self.X[m,:] = x1.reshape((1, self.n)) # Reshape x1 and set X_m
 
 dataPath = 'data/studentdata1.mat'
-a = ParticleFilter(dataPath, M = 250)
-# a.doUKF()
-
+a = ParticleFilter(dataPath, M = 1000)
+a.plotResults()
