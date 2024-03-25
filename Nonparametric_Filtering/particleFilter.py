@@ -14,7 +14,7 @@ class ParticleFilter:
         self.truth_t = dataFull['time']
         self.M = M  # set M, number of particles
         self.n = 15 # set n, number of states
-        self.Q = np.eye(15) * 0.0001 # set process noise covariance
+        self.Q = np.eye(15) * 10 # set process noise covariance
         self.R = np.eye(6) * 0.01
         self.C = np.zeros([6,15]) # set observability matrix C
         self.C[0:3, 0:3] = np.eye(3)
@@ -22,6 +22,7 @@ class ParticleFilter:
         self.X_bar = np.zeros((self.n, 1))
         self.X_hist = np.zeros((np.size(self.data), self.n))
         self.t_hist = np.zeros((np.size(self.data), 1))
+        self.z_hist = np.zeros((np.size(self.data), 6))
         
 
         # Init X's and weights
@@ -51,7 +52,7 @@ class ParticleFilter:
 
             # read measurement
             success, rvecIMU, tvecIMU = estimate_pose(_data)
-            if success and i < 200:
+            if success:# and i < 450:
                 self.z = np.vstack((tvecIMU, rvecIMU)).reshape(-1, 1)
 
                 # If we get a measurement, then step UKF
@@ -59,6 +60,9 @@ class ParticleFilter:
 
             self.X_hist[i, :] = self.X_bar
             self.t_hist[i] = self.t
+            # print(self.z)
+            # print(self.X_bar)
+            self.z_hist[i, :] = self.z.T
 
 
     def stepUKF(self):
@@ -68,13 +72,14 @@ class ParticleFilter:
         self.X_bar = np.dot(self.w.T, self.X)[0]
         self.lowVarianceSampling()
         # print(f"self.X_bar[0:3,1]: {self.X_bar[0:3]}")
-        # self.plotPosDist()
+        self.plotPosDist()
         # Method 2
         pass
 
     def plotPosDist(self):
         w_range = [min(self.w), max(self.w)]
         print(w_range)
+        plt.suptitle('t: ' + str(self.t))
         plt.subplot(3,1,1)
         plt.cla()
         plt.plot([self.z[0], self.z[0]], w_range,'b--')
@@ -136,13 +141,18 @@ class ParticleFilter:
 
             # TODO: include rest of gaussion dist equation?
             # likelihoods = np.exp(-0.5 * np.sum((self.z - z_predicted)**2)).reshape(1,1)
-            self.w[m] = np.exp(-0.5 * np.sum((self.z - z_predicted)**2)).reshape(1,1)
+            # self.w[m] = np.exp(-0.5 * np.sum((self.z - z_predicted)**2)).reshape(1,1)
             # Compute the weighted residual
             # residual = self.z - z_predicted
             # self.w[m] = np.dot(residual.T, np.linalg.inv(self.R)).dot(residual)
-        print(f"np.sum(self.w): {np.sum(self.w)}")
+            constant = 1.0 / ((2 * np.pi) ** (self.n / 2) * np.linalg.det(self.R) ** 0.5)
+            diff = self.z - z_predicted
+            exponent = -0.5 * np.dot(np.dot(diff.T, np.linalg.inv(self.R)), diff)
+            self.w[m] = constant * np.exp(exponent)
+
+        # print(f"np.sum(self.w): {np.sum(self.w)}")
         self.w /= np.sum(self.w)
-        print(f"np.sum(self.w): {np.sum(self.w)}")
+        # print(f"np.sum(self.w): {np.sum(self.w)}")
 
     def plotResults(self):
         plt.figure()
@@ -150,20 +160,46 @@ class ParticleFilter:
         plt.subplot(3,1,1)
         plt.plot(self.truth_t, self.truth_x[0,:], '-k', label='truth')
         plt.plot(self.t_hist, self.X_hist[:,0], 'r.', label='filtered')
+        plt.plot(self.t_hist, self.z_hist[:,0], 'b.', label='observation')
         plt.xlabel('Time')
         plt.ylabel('X (m)')
 
         plt.subplot(3,1,2)
         plt.plot(self.truth_t, self.truth_x[1,:], '-k', label='truth')
         plt.plot(self.t_hist, self.X_hist[:,1], 'r.', label='filtered')
+        plt.plot(self.t_hist, self.z_hist[:,1], 'b.', label='observation')
         plt.xlabel('Time')
         plt.ylabel('Y (m)')
 
         plt.subplot(3,1,3)
         plt.plot(self.truth_t, self.truth_x[2,:], '-k', label='truth')
         plt.plot(self.t_hist, self.X_hist[:,2], 'r.', label='filtered')
+        plt.plot(self.t_hist, self.z_hist[:,2], 'b.', label='observation')
         plt.xlabel('Time')
         plt.ylabel('Z (m)')
+
+        plt.figure()
+        plt.suptitle(self.dataPath + '\nM = ' + str(self.M))
+        plt.subplot(3,1,1)
+        plt.plot(self.truth_t, np.rad2deg(self.truth_x[3,:]), '-k', label='truth')
+        plt.plot(self.t_hist, np.rad2deg(self.X_hist[:,3]), 'r.', label='filtered')
+        plt.plot(self.t_hist, np.rad2deg(self.z_hist[:,3]), 'b.', label='observation')
+        plt.xlabel('Time')
+        plt.ylabel('Roll (deg)')
+
+        plt.subplot(3,1,2)
+        plt.plot(self.truth_t, np.rad2deg(self.truth_x[4,:]), '-k', label='truth')
+        plt.plot(self.t_hist, np.rad2deg(self.X_hist[:,4]), 'r.', label='filtered')
+        plt.plot(self.t_hist, np.rad2deg(self.z_hist[:,4]), 'b.', label='observation')
+        plt.xlabel('Time')
+        plt.ylabel('Pitch (deg)')
+
+        plt.subplot(3,1,3)
+        plt.plot(self.truth_t, np.rad2deg(self.truth_x[5,:]), '-k', label='truth')
+        plt.plot(self.t_hist, np.rad2deg(self.X_hist[:,5]), 'r.', label='filtered')
+        plt.plot(self.t_hist, np.rad2deg(self.z_hist[:,5]), 'b.', label='observation')
+        plt.xlabel('Time')
+        plt.ylabel('Yaw (deg)')
 
         plt.show()
 
@@ -211,5 +247,5 @@ class ParticleFilter:
             self.X[m,:] = x1.reshape((1, self.n)) # Reshape x1 and set X_m
 
 dataPath = 'data/studentdata1.mat'
-a = ParticleFilter(dataPath, M = 1000)
+a = ParticleFilter(dataPath, M = 100)
 a.plotResults()
