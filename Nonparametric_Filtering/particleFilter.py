@@ -1,8 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-
 from observationModel import *
-
 
 class ParticleFilter:
     def __init__(self, dataPath, M = 1000):
@@ -14,8 +12,12 @@ class ParticleFilter:
         self.truth_t = dataFull['time']
         self.M = M  # set M, number of particles
         self.n = 15 # set n, number of states
-        self.Q = np.eye(15) * 10 # set process noise covariance
-        self.R = np.eye(6) * 0.01
+        # self.Q = np.eye(15) * 10 # set process noise covariance
+        self.Q = np.diag([0.01] * 3 + [0.002] * 3 + [.1] * 3 + [.001] * 6) * 500
+        # self.Q = np.eye(15) * .01
+        # self.Q = np.diag([0.0001] * 3 + [0.0001] * 3 + [0.01] * 3 + [0.01] * 6) *  5000
+        # self.R = np.eye(6) * 0.01
+        self.R = np.diag([0.00558, 0.00558, 0.00558, 0.00412, 0.00412, 0.00412])
         self.C = np.zeros([6,15]) # set observability matrix C
         self.C[0:3, 0:3] = np.eye(3)
         self.C[3:6, 3:6] = np.eye(3)
@@ -24,12 +26,11 @@ class ParticleFilter:
         self.t_hist = np.zeros((np.size(self.data), 1))
         self.z_hist = np.zeros((np.size(self.data), 6))
         
-
         # Init X's and weights
         self.X = np.zeros((self.M, self.n)) # 1000x15 X_m's
         self.X[:,0:3] = np.random.uniform(low=0.0, high=2.0, size=(M, 3))                           # [0,2] xyz
         self.X[:,3:6] = np.random.uniform(low=np.deg2rad(-20), high=np.deg2rad(20), size=(M, 3))    # [-20,20] deg rpy
-        self.X[:,6:9] = np.random.uniform(low=-1.0, high=1.0, size=(M, 3))                          # [-1,1] xyz_d
+        self.X[:,6:9] = np.random.uniform(low=-0.5, high=0.5, size=(M, 3))                          # [-1,1] xyz_d
         self.X[:,9:12] = np.random.uniform(low=-0.5, high=0.5, size=(M, 3))                         
         self.X[:,12:15] = np.random.uniform(low=-0.5, high=0.5, size=(M, 3))
 
@@ -52,7 +53,7 @@ class ParticleFilter:
 
             # read measurement
             success, rvecIMU, tvecIMU = estimate_pose(_data)
-            if success:# and i < 450:
+            if success:# and i < 200:
                 self.z = np.vstack((tvecIMU, rvecIMU)).reshape(-1, 1)
 
                 # If we get a measurement, then step UKF
@@ -72,7 +73,9 @@ class ParticleFilter:
         self.X_bar = np.dot(self.w.T, self.X)[0]
         self.lowVarianceSampling()
         # print(f"self.X_bar[0:3,1]: {self.X_bar[0:3]}")
-        self.plotPosDist()
+        # self.plotPosDist()
+        # self.updateTruth()
+        # self.plotPosDistVel()
         # Method 2
         pass
 
@@ -106,6 +109,39 @@ class ParticleFilter:
         plt.xlim([-1,3])
         plt.subplot(3,1,3)
         plt.xlim([-0.5,3])
+
+        plt.pause(0.01)
+        
+    def plotPosDistVel(self):
+        w_range = [min(self.w), max(self.w)]
+        print(w_range)
+        plt.suptitle('Velocity, t: ' + str(self.t))
+        plt.subplot(3,1,1)
+        plt.cla()
+        plt.plot([self.current_truth[6], self.current_truth[6]], w_range,'b--')
+        plt.plot([self.X_bar[6], self.X_bar[6]], w_range,'r--')
+        plt.subplot(3,1,2)
+        plt.cla()
+        plt.plot([self.current_truth[7], self.current_truth[7]], w_range,'b--')
+        plt.plot([self.X_bar[7], self.X_bar[7]], w_range,'r--')
+        plt.subplot(3,1,3)
+        plt.cla()
+        plt.plot([self.current_truth[8], self.current_truth[8]], w_range,'b--')
+        plt.plot([self.X_bar[8], self.X_bar[8]], w_range,'r--')
+        for m in range(self.M):
+            plt.subplot(3,1,1)
+            plt.plot(self.X[m,6], self.w[m], '.r')
+            plt.subplot(3,1,2)
+            plt.plot(self.X[m,7], self.w[m], '.r')
+            plt.subplot(3,1,3)
+            plt.plot(self.X[m,8], self.w[m], '.r')
+
+        plt.subplot(3,1,1)
+        plt.xlim([-3,3])
+        plt.subplot(3,1,2)
+        plt.xlim([-3,3])
+        plt.subplot(3,1,3)
+        plt.xlim([-3,3])
 
         plt.pause(0.01)
         
@@ -177,6 +213,7 @@ class ParticleFilter:
         plt.plot(self.t_hist, self.z_hist[:,2], 'b.', label='observation')
         plt.xlabel('Time')
         plt.ylabel('Z (m)')
+        plt.legend()
 
         plt.figure()
         plt.suptitle(self.dataPath + '\nM = ' + str(self.M))
@@ -200,6 +237,49 @@ class ParticleFilter:
         plt.plot(self.t_hist, np.rad2deg(self.z_hist[:,5]), 'b.', label='observation')
         plt.xlabel('Time')
         plt.ylabel('Yaw (deg)')
+        plt.legend()
+
+        plt.figure()
+        plt.suptitle(self.dataPath + '\nM = ' + str(self.M))
+        plt.subplot(3,1,1)
+        plt.plot(self.truth_t, self.truth_x[6,:], '-k', label='truth')
+        plt.plot(self.t_hist, self.X_hist[:,6], 'r.', label='filtered')
+        plt.xlabel('Time')
+        plt.ylabel('Xd (m)')
+
+        plt.subplot(3,1,2)
+        plt.plot(self.truth_t, self.truth_x[7,:], '-k', label='truth')
+        plt.plot(self.t_hist, self.X_hist[:,7], 'r.', label='filtered')
+        plt.xlabel('Time')
+        plt.ylabel('Yd(m)')
+
+        plt.subplot(3,1,3)
+        plt.plot(self.truth_t, self.truth_x[8,:], '-k', label='truth')
+        plt.plot(self.t_hist, self.X_hist[:,8], 'r.', label='filtered')
+        plt.xlabel('Time')
+        plt.ylabel('Zd (m)')
+        plt.legend()
+
+        plt.figure()
+        plt.suptitle(self.dataPath + '\nM = ' + str(self.M))
+        plt.subplot(3,1,1)
+        plt.plot(self.t_hist, self.X_hist[:,9], 'r.', label='accel')
+        plt.plot(self.t_hist, self.X_hist[:,12], 'g.', label='gyro')
+        plt.xlabel('Time')
+        plt.ylabel('bias X (m/s^2, rad/s)')
+
+        plt.subplot(3,1,2)
+        plt.plot(self.t_hist, self.X_hist[:,10], 'r.', label='accel')
+        plt.plot(self.t_hist, self.X_hist[:,13], 'g.', label='gyro')
+        plt.xlabel('Time')
+        plt.ylabel('bias Y (m/s^2, rad/s)')
+
+        plt.subplot(3,1,3)
+        plt.plot(self.t_hist, self.X_hist[:,11], 'r.', label='accel')
+        plt.plot(self.t_hist, self.X_hist[:,14], 'g.', label='gyro')
+        plt.xlabel('Time')
+        plt.ylabel('bias Z (m/s^2, rad/s)')
+        plt.legend()
 
         plt.show()
 
@@ -224,11 +304,7 @@ class ParticleFilter:
         for m in range(self.M):
 
             x0 = self.X[m,:].reshape((self.n,1)) # grab particle (1,15) and reshape (15,1)
-            # print(f"np.shape(x0[3:6]): {np.shape(x0[3:6])}")
-            # print(f"x0[3:6]: {x0[3:6]}")
             rMat, gMat = self.getRmatGmat(x0) # get rMat and gMat
-            # rMat = R(x0[3:6])
-            # gMat = G(x0[3:6])
             g = np.array([[0], [0], [-9.81]]) # gravity vector
 
             # Build xd
@@ -236,6 +312,8 @@ class ParticleFilter:
             xd[0:3]   = x0[6:9]
             xd[3:6]   = np.linalg.inv(gMat) @ (self.u[0:3] + x0[9:12])
             xd[6:9]   = g + rMat @ (self.u[3:6] + x0[12:15])
+            # xd[3:6]   = np.linalg.inv(gMat) @ (self.u[0:3])
+            # xd[6:9]   = g + rMat @ (self.u[3:6])
             xd[9:12]  = np.zeros((3,1))
             xd[12:15] = np.zeros((3,1))
 
@@ -246,6 +324,13 @@ class ParticleFilter:
             x1 = x0 + (xd + noise) * self.dt
             self.X[m,:] = x1.reshape((1, self.n)) # Reshape x1 and set X_m
 
+    def updateTruth(self):
+        self.current_truth = np.zeros((12,1))
+        for i in range(12):
+            self.current_truth[i] = np.interp(self.t, self.truth_t, self.truth_x[i])
+        pass
+
+
 dataPath = 'data/studentdata1.mat'
-a = ParticleFilter(dataPath, M = 100)
+a = ParticleFilter(dataPath, M = 10000)
 a.plotResults()
