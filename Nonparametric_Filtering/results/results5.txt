@@ -1,0 +1,56 @@
+RMSE for data/studentdata5.mat with 250 particles
+        Weighted Average:
+                Position: 0.251 m       Rotation: 0.14 rad
+        Average:
+                Position: 0.26 m        Rotation: 0.139 rad
+        Highest:
+                Position: 0.249 m       Rotation: 0.146 rad
+RMSE for data/studentdata5.mat with 500 particles
+        Weighted Average:
+                Position: 0.247 m       Rotation: 0.132 rad
+        Average:
+                Position: 0.252 m       Rotation: 0.129 rad
+        Highest:
+                Position: 0.247 m       Rotation: 0.144 rad
+RMSE for data/studentdata5.mat with 750 particles
+        Weighted Average:
+                Position: 0.248 m       Rotation: 0.135 rad
+        Average:
+                Position: 0.254 m       Rotation: 0.132 rad
+        Highest:
+                Position: 0.248 m       Rotation: 0.147 rad
+RMSE for data/studentdata5.mat with 1000 particles
+        Weighted Average:
+                Position: 0.252 m       Rotation: 0.138 rad
+        Average:
+                Position: 0.26 m        Rotation: 0.137 rad
+        Highest:
+                Position: 0.251 m       Rotation: 0.14 rad
+RMSE for data/studentdata5.mat with 2000 particles
+        Weighted Average:
+                Position: 0.251 m       Rotation: 0.138 rad
+        Average:
+                Position: 0.256 m       Rotation: 0.136 rad
+        Highest:
+                Position: 0.25 m        Rotation: 0.148 rad
+RMSE for data/studentdata5.mat with 3000 particles
+        Weighted Average:
+                Position: 0.252 m       Rotation: 0.136 rad
+        Average:
+                Position: 0.258 m       Rotation: 0.134 rad
+        Highest:
+                Position: 0.257 m       Rotation: 0.15 rad
+RMSE for data/studentdata5.mat with 4000 particles
+        Weighted Average:
+                Position: 0.253 m       Rotation: 0.137 rad
+        Average:
+                Position: 0.262 m       Rotation: 0.135 rad
+        Highest:
+                Position: 0.251 m       Rotation: 0.148 rad
+RMSE for data/studentdata5.mat with 5000 particles
+        Weighted Average:
+                Position: 0.249 m       Rotation: 0.138 rad
+        Average:
+                Position: 0.255 m       Rotation: 0.136 rad
+        Highest:
+                Position: 0.25 m        Rotation: 0.15 rad
