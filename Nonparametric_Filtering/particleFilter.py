@@ -244,15 +244,9 @@ class ParticleFilter:
 
 
     def plotResults(self, sampling='weighted_average'):
-        # if self.eval == 'highest':
-        #     x_bar = self.X_hist_highest
-        # elif self.eval == 'average':
-        #     x_bar = self.X_hist_average
-        # elif self.eval == 'weighted_average':
-        #     x_bar = self.X_hist_weighted_average
-        # else:
-        #     raise ValueError('Invalid sampling method!')
-        # pass
+        """
+        Plots filtered states vs time according to sampling method.
+        """
         if sampling == 'highest':
             x_bar = self.X_hist_highest
         elif sampling == 'average':
@@ -262,7 +256,7 @@ class ParticleFilter:
         else:
             raise ValueError('Invalid sampling method!')
         pass
-        # x_bar = self.X_hist_weighted_average
+    
         plt.figure()
         plt.suptitle(self.dataPath + '\nM = ' + str(self.M))
         plt.subplot(3,1,1)
@@ -356,7 +350,9 @@ class ParticleFilter:
         plt.show()
 
     def plotResults3D(self, sampling='weighted_average'):
-
+        """
+        Plots filter results in 3D according to sampling method.
+        """
         if sampling == 'highest':
             x_bar = self.X_hist_highest
         elif sampling == 'average':
@@ -439,68 +435,6 @@ class ParticleFilter:
             # x_t+1 = x_t + xd_t * dt
             x1 = x0 + (xd + noise) * self.dt
             self.X[m,:] = x1.reshape((1, self.n)) # Reshape x1 and set X_m
-
-    def propogateXsFast(self):
-        """
-        Propagates the state particles forward in time using the process model.
-
-        This method loops through all particles and updates their state by applying the process model
-        and adding process noise.
-
-        The process model computes the next state based on the current state (x0) and control inputs (u).
-
-        Process model:
-        - x_t+1 = x_t + (xd_t + noise) * dt
-        """
-        # Extract necessary variables
-        X = self.X
-        u = self.u
-        dt = self.dt
-        M = self.M
-        n = self.n
-        Q = self.Q
-        
-        # Gravity vector
-        g = np.array([[0], [0], [-9.81]])
-        
-        # Compute rMat and gMat for all particles
-        rMat, gMat = self.getRmatGmat_batch(X)
-
-        # Build xd for all particles
-        xd = np.zeros_like(X)
-        xd[:, 0:3] = X[:, 6:9]
-        xd[:, 3:6] = np.matmul(np.linalg.inv(gMat), (self.u[0:3] + X[9:12]).reshape(M, 3, 1))
-        xd[:, 6:9] = g + np.matmul(rMat, (u[3:6].T + X[:, 12:15]))
-        xd[:, 9:12] = np.zeros((M, 3))
-        xd[:, 12:15] = np.zeros((M, 3))
-        
-        # Generate process noise for all particles
-        noise = np.random.multivariate_normal(np.zeros(n), Q, size=M).reshape(-1, n, 1)
-
-        # Update states for all particles
-        X += (xd + noise) * dt
-        self.X = X
-
-    def getRmatGmat_batch(self, X):
-        M = X.shape[0]  # Number of particles
-        rMat_batch = np.zeros((M, 3, 3))
-        gMat_batch = np.zeros((M, 3, 3))
-        
-        for i in range(M):
-            # Compute rMat and gMat for the i-th particle
-            # (Assuming this is similar to the original getRmatGmat function)
-            x0 = X[i, :].reshape((self.n, 1))
-            rMat, gMat = self.getRmatGmat(x0)
-            rMat_batch[i] = rMat
-            gMat_batch[i] = gMat
-        
-        return rMat_batch, gMat_batch
-
-    # def updateTruth(self):
-    #     self.current_truth = np.zeros((12,1))
-    #     for i in range(12):
-    #         self.current_truth[i] = np.interp(self.t, self.truth_t, self.truth_x[i])
-    #     pass
 
     def computeRMSE(self):
         """
