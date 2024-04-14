@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 import scipy
 
 from observationModel import *
+from unscentedKalmanFilter import *
+
+def RMSE():
+
+    pass
 
 def plot_results(x, t, dataPath):
     """
@@ -231,3 +236,89 @@ def plot_results3D(x, t, dataPath):
     ax.set_zlabel('Z (m)')
     ax.set_aspect('equal')
     plt.show()
+
+def getUKF_RMSE(dataPath, R, Q):
+    """
+    Prints the RMSE for position and rotation vectors between UKF filtered states and truth states.
+    """
+
+    xs, ts = UKF(dataPath, R, Q)
+    # plot_results2(xs, ts, dataPath) # Call plotting function
+
+    indices_to_keep = xs[0,:] != 0
+
+    xs_filtered = xs[:,indices_to_keep]
+    ts_filtered = ts[indices_to_keep]
+
+    # print(f"np.shape(xs): {np.shape(xs_filtered)}")
+    # print(f"np.shape(ts): {np.shape(ts_filtered)}")
+
+    dataFull = scipy.io.loadmat(dataPath, simplify_cells=True)
+    truth_poss = np.transpose(dataFull['vicon'][0:3, :])
+    truth_rots = np.transpose(dataFull['vicon'][3:6, :])
+    truth_ts = np.transpose(dataFull['time'])
+
+    # Interpolate truth values
+    truth_poss_int =  np.zeros(np.shape(xs_filtered))
+
+    for i, t in enumerate(ts_filtered):
+        t = t[0]
+        truth_poss_int[0:3, i] = interpTruthData(truth_poss, truth_ts, t).flatten()
+        truth_poss_int[3:6, i] = interpTruthData(truth_rots, truth_ts, t).flatten()
+
+    # plt.plot(ts_filtered, truth_poss_int[1,:], 'k')
+    # plt.plot(ts_filtered, xs_filtered[1,:], 'r.')
+
+    error = xs_filtered[0:3,:] - truth_poss_int[0:3,:]
+    error_pos = np.linalg.norm(error, axis=0)
+
+    RMSE_pos = np.sqrt(np.mean(error_pos**2))
+
+    error2 = xs_filtered[3:6,:] - truth_poss_int[3:6,:]
+    error_rot = np.linalg.norm(error2, axis=0)
+
+    RMSE_rot = np.sqrt(np.mean(error_rot**2))
+
+    print(f"{np.round(RMSE_pos, 3)}, {np.round(RMSE_rot, 3)}")
+
+def getUKF_RMSE2(dataPath, xs, ts):
+    """
+    Prints the RMSE for position and rotation vectors between UKF filtered states and truth states.
+    """
+
+    indices_to_keep = xs[0,:] != 0
+
+    xs_filtered = xs[:,indices_to_keep]
+    ts_filtered = ts[indices_to_keep]
+
+    # print(f"np.shape(xs): {np.shape(xs_filtered)}")
+    # print(f"np.shape(ts): {np.shape(ts_filtered)}")
+
+    dataFull = scipy.io.loadmat(dataPath, simplify_cells=True)
+    truth_poss = np.transpose(dataFull['vicon'][0:3, :])
+    truth_rots = np.transpose(dataFull['vicon'][3:6, :])
+    truth_ts = np.transpose(dataFull['time'])
+
+    # Interpolate truth values
+    truth_poss_int =  np.zeros(np.shape(xs_filtered))
+
+    for i, t in enumerate(ts_filtered):
+        t = t[0]
+        truth_poss_int[0:3, i] = interpTruthData(truth_poss, truth_ts, t).flatten()
+        truth_poss_int[3:6, i] = interpTruthData(truth_rots, truth_ts, t).flatten()
+
+    # plt.plot(ts_filtered, truth_poss_int[1,:], 'k')
+    # plt.plot(ts_filtered, xs_filtered[1,:], 'r.')
+
+    error = xs_filtered[0:3,:] - truth_poss_int[0:3,:]
+    error_pos = np.linalg.norm(error, axis=0)
+
+    RMSE_pos = np.sqrt(np.mean(error_pos**2))
+
+    error2 = xs_filtered[3:6,:] - truth_poss_int[3:6,:]
+    error_rot = np.linalg.norm(error2, axis=0)
+
+    RMSE_rot = np.sqrt(np.mean(error_rot**2))
+
+    # print(f"{np.round(RMSE_pos, 3)}, {np.round(RMSE_rot, 3)}")
+    return np.array([np.round(RMSE_pos, 3), np.round(RMSE_rot, 3)])
