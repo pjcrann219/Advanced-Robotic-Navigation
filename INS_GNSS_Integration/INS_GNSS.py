@@ -27,11 +27,13 @@ class INS_GNSS:
         n = 15
 
         x_prior = np.vstack([self.data[0,1:7][:, np.newaxis], np.zeros([9,1])])
-        x_prior[5,0] = np.deg2rad(195)
+        x_prior[5,0] = np.deg2rad(-195)
+
+        print(x_prior)
 
         P = self.P
-        # for i in range(self.len):
-        for i in range(1000):
+        for i in range(self.len):
+        # for i in range(1000):
             t = self.data_t[i,0]
 
             gyro = self.data_gyro_xyz[i, :][:, np.newaxis]
@@ -39,68 +41,68 @@ class INS_GNSS:
             z_lla = self.data_z_lla[i, :]
             z_VNED = self.data_z_VNED[i, :]
 
-            # Get sigma points X0 with wights wm, wc
-            X0, wm, wc = getSigmaPoints(x_prior, P, n)
+            # # Get sigma points X0 with wights wm, wc
+            # X0, wm, wc = getSigmaPoints(x_prior, P, n)
             
-            # Propogate sigma points through state transition
-            X1 = np.zeros(np.shape(X0))
-            for j in range(2*n+1):
-                thisX = X0[:,j]
-                X1[:,j] = np.squeeze(propogation_model_feedback(x_prior, gyro, accel, self.dt))
+            # # Propogate sigma points through state transition
+            # X1 = np.zeros(np.shape(X0))
+            # for j in range(2*n+1):
+            #     thisX = X0[:,j]
+            #     X1[:,j] = np.squeeze(propogation_model_feedback(x_prior, gyro, accel, self.dt))
             
-            # Recover mean
-            x = np.sum(X1 * wm, axis=1)
-            # Recover variance
-            diff = X1-np.vstack(x)
-            P = np.zeros((n, n))
-            diff2 = X1-np.vstack(X1[:,0])
-            for j in range(2*n+1):
-                d = diff2[:, j].reshape(-1,1)
-                P += wc[j] * d @ d.T
-            P += self.Q
+            # # Recover mean
+            # x = np.sum(X1 * wm, axis=1)
+            # # Recover variance
+            # diff = X1-np.vstack(x)
+            # P = np.zeros((n, n))
+            # diff2 = X1-np.vstack(X1[:,0])
+            # for j in range(2*n+1):
+            #     d = diff2[:, j].reshape(-1,1)
+            #     P += wc[j] * d @ d.T
+            # P += self.Q
 
-            # Get new sigma points
-            X2, wm, wc = getSigmaPoints(x, self.P, n)
+            # # Get new sigma points
+            # X2, wm, wc = getSigmaPoints(x, self.P, n)
 
-            # Put sigma points through measurement model
-            Z = np.zeros([6,2*n+1])
-            for j in range(2*n+1):
-                thisX = X2[:,j]
-                Z[:,j] = measurement_model(thisX)
+            # # Put sigma points through measurement model
+            # Z = np.zeros([6,2*n+1])
+            # for j in range(2*n+1):
+            #     thisX = X2[:,j]
+            #     Z[:,j] = measurement_model(thisX)
 
-                # Recover mean
-            z = np.sum(Z * wm, axis=1)
+            #     # Recover mean
+            # z = np.sum(Z * wm, axis=1)
 
-            # Recover variance
-            S = np.zeros((6,6))
+            # # Recover variance
+            # S = np.zeros((6,6))
 
-            diff2 = Z-np.vstack(Z[:,0])
-            for j in range(2 * n + 1):
-                d = diff2[:, j].reshape(-1,1)
-                S += wc[j] * d @ d.T
-            S += self.R
+            # diff2 = Z-np.vstack(Z[:,0])
+            # for j in range(2 * n + 1):
+            #     d = diff2[:, j].reshape(-1,1)
+            #     S += wc[j] * d @ d.T
+            # S += self.R
 
 
-            diff = Z-np.vstack(z)
-            # Compute cross covariance
-            cxz = np.zeros([n,6])
-            for j in range(2 * n + 1):
-                cxz += wc[j] * np.outer(X2[:,j] - x, diff[:, j])
+            # diff = Z-np.vstack(z)
+            # # Compute cross covariance
+            # cxz = np.zeros([n,6])
+            # for j in range(2 * n + 1):
+            #     cxz += wc[j] * np.outer(X2[:,j] - x, diff[:, j])
 
-            # Compute Kalman Gain
-            K = cxz @ np.linalg.inv(S)
+            # # Compute Kalman Gain
+            # K = cxz @ np.linalg.inv(S)
 
-            z_meas = np.vstack((z_lla, z_VNED)).reshape((6, 1))
+            # z_meas = np.vstack((z_lla, z_VNED)).reshape((6, 1))
 
-            # Update estimate
-            x = x.reshape(-1,1) + K @ (z_meas - np.vstack(z))
-            print(z_meas - np.vstack(z))
-            # Update variance
-            P = P - K @ S @ np.transpose(K)
+            # # Update estimate
+            # x = x.reshape(-1,1) + K @ (z_meas - np.vstack(z))
+            # print(z_meas - np.vstack(z))
+            # # Update variance
+            # P = P - K @ S @ np.transpose(K)
 
-            x_post = x
+            # x_post = x
 
-            # x_post = propogation_model_feedback(x_prior, gyro, accel, self.dt)
+            x_post = propogation_model_feedback(x_prior, gyro, accel, self.dt)
             self.x_fb[i,:] = x_post[:,0]
             x_prior = x_post
             print(f"i: {i}\tt: {t}")
@@ -199,5 +201,24 @@ plt.title('V_D vs Time')
 plt.ylabel('V_D')
 plt.legend()
 plt.suptitle('VNED vs Time measured and filtered')
+
+plt.figure()
+plt.subplot(3,1,1)
+plt.plot(a.data_t, a.data_true_rpy[:,0], '-k', label='x')
+plt.plot(a.data_t, a.x_fb[:,3], '.', label='x')
+plt.title('r vs Time')
+plt.ylabel('r')
+plt.subplot(3,1,2)
+plt.plot(a.data_t, a.data_true_rpy[:,1], '-k', label='x')
+plt.plot(a.data_t, a.x_fb[:,4], '.', label='x')
+plt.title('p vs Time')
+plt.ylabel('p')
+plt.subplot(3,1,3)
+plt.plot(a.data_t, a.data_true_rpy[:,2], '-k', label='x')
+plt.plot(a.data_t, a.x_fb[:,5], '.', label='x')
+plt.title('y vs Time')
+plt.ylabel('y')
+plt.legend()
+plt.suptitle('RPY vs Time measured and filtered')
 
 plt.show()

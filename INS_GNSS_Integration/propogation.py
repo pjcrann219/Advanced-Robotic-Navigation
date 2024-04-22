@@ -21,7 +21,7 @@ def attitude_update_feedback(x_prior, w_i_b, dt):
     #     tuple[np.ndarray, np.ndarray]: A tuple containing the prior rotation matrix and the updated rotation matrix.
 
     w_e = 7.2921157E-5 # Earths rate of rotation (rad/s)
-    omega_i_e = np.zeros((3, 3)); omega_i_e[0, 1] = omega_i_e[1, 0] = w_e
+    omega_i_e = np.zeros((3, 3)); omega_i_e[0, 1] = -w_e; omega_i_e[1, 0] = w_e
 
     Rn, Re, Rp = principal_radii(x_prior[0,0], x_prior[1,0])
 
@@ -55,21 +55,20 @@ def attitude_update_feedforward(x_prior, w_i_b, dt):
     #     tuple[np.ndarray, np.ndarray]: A tuple containing the prior rotation matrix and the updated rotation matrix.
 
     w_e = 7.2921157E-5 # Earths rate of rotation (rad/s)
-    omega_i_e = np.zeros((3, 3)); omega_i_e[0, 1] = omega_i_e[1, 0] = w_e
+    omega_i_e = np.zeros((3, 3)); omega_i_e[0, 1] -w_e; omega_i_e[1, 0] = w_e
 
     Rn, Re, Rp = principal_radii(x_prior[0,0], x_prior[1,0])
 
     w_e_n = np.array([\
         x_prior[7,0] / (Re + x_prior[2,0]),\
         -x_prior[7,0] / (Rn + x_prior[2,0]),\
-        -x_prior[7,0] * np.tan(x_prior[0,0]) / (Re + x_prior[2,0])])[:,np.newaxis]
+        -x_prior[7,0] * np.tan(np.deg2rad(x_prior[0,0])) / (Re + x_prior[2,0])])[:,np.newaxis]
     
     omega_e_n = skew(w_e_n)
-
     omega_i_b = skew(w_i_b)
 
     # convert current rotation euler to matrix R_prev
-    R_prior = Rotation.from_euler('zyx', x_prior[3:6,0]).as_matrix()
+    R_prior = Rotation.from_euler('zyx', x_prior[3:6,0], degrees=True).as_matrix()
 
     # Calc R_post
     R_post = R_prior @ (np.eye(3) + omega_i_b * dt) \
@@ -89,13 +88,26 @@ def velocity_update_feedback(x_prior, R_prior, R_post, f_bt, dt):
     # Outputs:
     #     (np.ndarray): A 3x1 numpy array representing the updated velocity.
 
+    # TODO: this section gets repeated a lot
+    w_e = 7.2921157E-5 # Earths rate of rotation (rad/s)
+    omega_i_e = np.zeros((3, 3)); omega_i_e[0, 1] = omega_i_e[1, 0] = w_e
+    Rn, Re, Rp = principal_radii(x_prior[0,0], x_prior[1,0])
+
+    w_e_n = np.array([\
+        x_prior[7,0] / (Re + x_prior[2,0]),\
+        -x_prior[7,0] / (Rn + x_prior[2,0]),\
+        -x_prior[7,0] * np.tan(np.deg2rad(x_prior[0,0])) / (Re + x_prior[2,0])])[:,np.newaxis]
+    
+    omega_e_n = skew(w_e_n)
+
     f_bar = f_bt - x_prior[12:15,0][:,np.newaxis]
 
     f_nt = 0.5 * (R_prior + R_post)@f_bar
 
     g_LH = gravity_n(x_prior[0,0], x_prior[2,0])[:,np.newaxis]
 
-    v_post = x_prior[6:9,0][:,np.newaxis] + dt*(f_nt - g_LH)# - (1-1)*x_prior[6:9,0])
+    v_post = x_prior[6:9,0][:,np.newaxis] + \
+        dt*(f_nt + g_LH - (omega_e_n + 2*omega_i_e)@x_prior[6:9,0][:,np.newaxis])
 
     return v_post
 
@@ -135,7 +147,7 @@ def position_update(x_prior, v_post, dt):
                     v_post[0,0] / (Rn + h_post))
 
     Lon_post = x_prior[1,0] + 0.5 * dt * (x_prior[7,0] / ((Re + x_prior[2,0])) + \
-                    v_post[1,0]/(Re_post + h_post)*np.cos(Lat_post))
+                    v_post[1,0]/(Re_post + h_post)*np.cos(np.deg2rad(Lat_post)))
 
     LLA_post = np.vstack([Lat_post, Lon_post, h_post])
 
@@ -155,7 +167,7 @@ def propogation_model_feedback(x_prior, w_i_b, f_bt, dt):
     v_post = velocity_update_feedback(x_prior, R_prior, R_post, f_bt, dt)
     LLA_post = position_update(x_prior, v_post, dt)
 
-    q_post = Rotation.from_matrix(R_post).as_euler('zyx')[:, np.newaxis]
+    q_post = Rotation.from_matrix(R_post).as_euler('zyx', degrees=True)[:, np.newaxis]
 
     x_post = np.vstack([LLA_post, q_post, v_post, x_prior[9:15]])
 
@@ -175,7 +187,7 @@ def propogation_model_feedforward(x_prior, w_i_b, f_bt, dt):
     v_post = velocity_update_feedforward(x_prior, R_prior, R_post, f_bt, dt)
     LLA_post = position_update(x_prior, v_post, dt)
 
-    q_post = Rotation.from_matrix(R_post).as_euler('zyx')[:, np.newaxis]
+    q_post = Rotation.from_matrix(R_post).as_euler('zyx', degrees=True)[:, np.newaxis]
 
     x_post = np.vstack([LLA_post, q_post, v_post, x_prior[9:12]])
 
